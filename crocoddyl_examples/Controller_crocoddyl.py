@@ -71,14 +71,12 @@ class Controller:
         self.gait += [self.gait[-1]]
 
     def compute_step(self, x0, x_ref, u_ref):
-        problem = self.ocp.createMovingFootProblem(self.x0, self.gait, self.target, self.dt)
+        problem = self.ocp.createMovingFootProblem(self.x0, u_ref, self.gait, self.target, self.dt)
 
-        self._solver = crocoddyl.SolverBoxDDP(problem)
+        self._solver = crocoddyl.SolverDDP(problem)
 
         # Solve the DDP problem
         print('*** SOLVE ***')
-        cameraTF = [2., 2.68, 0.84, 0.2, 0.62, 0.72, 0.22]
-
         self._solver.setCallbacks([crocoddyl.CallbackVerbose()])
 
         xs = [x0] * (self._solver.problem.T + 1)

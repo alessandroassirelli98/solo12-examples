@@ -29,7 +29,7 @@ def control_loop(ctrl):
 
 
 if __name__ == '__main__':
-    ctrl = Controller(20, 60, dt_ocp)
+    ctrl = Controller(30, 60, dt_ocp)
     local_res = Results()
 
     #p.startStateLogging( p.STATE_LOGGING_VIDEO_MP4, 'video.mp4' )
