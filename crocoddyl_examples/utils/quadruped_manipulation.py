@@ -23,6 +23,9 @@ class SimpleManipulationProblem:
             self.rfFootId = self.rmodel.getFrameId(rfFoot)
             self.lhFootId = self.rmodel.getFrameId(lhFoot)
             self.rhFootId = self.rmodel.getFrameId(rhFoot)
+
+            self.allContactsIds = (self.lfFootId, self.rfFootId, self.lhFootId, self.rhFootId)
+
             self.integrator = integrator
             if control == 'one':
                 self.control = crocoddyl.ControlParametrizationModelPolyOne(self.actuation.nu)
@@ -40,22 +43,10 @@ class SimpleManipulationProblem:
             self.mu = 0.7
             self.Rsurf = np.eye(3)
 
-    def create_target(self, t_, start_pos, stepNodes, timestep):
-        # Here we create the target of the control
-        # FR Foot moving in a circular way
+    def patternToId(self, gait):
+        return [self.allContactsIds[i] for i,c in enumerate(gait) if c==1 ]
 
-        FR_foot0 = start_pos
-        A = np.array([0, 0.05, 0.05]) 
-        offset = np.array([0.05, 0., 0.06])
-        freq = np.array([0, 1.5, 1.5])
-        phase = np.array([0,0,np.pi/2])
-
-        target = []
-        for t in range(stepNodes): target += [FR_foot0 + offset +A*np.sin(2*np.pi*freq * (t+t_)* timestep + phase)]
-        self.target = np.array(target)
-
-
-    def createMovingFootProblem(self, x0, stepLength, stepHeight, timeStep, stepKnots, supportKnots):
+    def createMovingFootProblem(self, x0, gait, target, timeStep,):
         """ Create a shooting problem for a simple walking gait.
 
         :param x0: initial state
@@ -76,28 +67,27 @@ class SimpleManipulationProblem:
         lhFootPos0 = self.rdata.oMf[self.lhFootId].translation
         comRef = (rfFootPos0 + rhFootPos0 + lfFootPos0 + lhFootPos0) / 4
         comRef[2] = pinocchio.centerOfMass(self.rmodel, self.rdata, q0)[2].item()
+        
+        freeIds = []
+        contactSequence = [ self.patternToId(p) for p in gait ]
 
-        self.create_target(0, rfFootPos0, stepKnots, timeStep)
+        T = len(gait)-1
+        model = []
+        
+        for t in range(T):
+            
+            freeIds = [idf for idf in self.allContactsIds if idf not in contactSequence[t]]
+            print("Contacts on ", contactSequence[t])
+            print("Free on: ", freeIds)
 
-        # Defining the action models along the time instances
-        loco3dModel = []
-        doubleSupport = [
-            self.createSwingFootModel(
-                timeStep,
-                [self.lfFootId, self.rfFootId, self.lhFootId, self.rhFootId],
-            ) for k in range(supportKnots)
-        ]
-        if self.firstStep is True:
-            rfStep = self.createFootstepModels(comRef, [rfFootPos0], 0.5 * stepLength, stepHeight, timeStep, stepKnots,
-                                               [self.lfFootId, self.lhFootId, self.rhFootId], [self.rfFootId])
-            self.firstStep = False
+            model += self.createFootstepModels(comRef, target[t], timeStep, contactSequence[t], freeIds)
+        
+        model += self.createFootstepModels(comRef, target[t], timeStep, contactSequence[t], freeIds)
 
-        loco3dModel += doubleSupport + rfStep
-
-        problem = crocoddyl.ShootingProblem(x0, loco3dModel[:-1], loco3dModel[-1])
+        problem = crocoddyl.ShootingProblem(x0, model[:-1], model[-1])
         return problem
 
-    def createFootstepModels(self, comPos0, feetPos0, stepLength, stepHeight, timeStep, numKnots, supportFootIds,
+    def createFootstepModels(self, comPos0, target, timeStep, supportFootIds,
                              swingFootIds):
         """ Action models for a footstep phase.
 
@@ -115,18 +105,19 @@ class SimpleManipulationProblem:
 
         # Action models for the foot swing
         footSwingModel = []
-        for k in range(numKnots):
-            swingFootTask = []
-            for i, p in zip(swingFootIds, feetPos0):
-                tref = self.target[k]
-                swingFootTask += [[i, pinocchio.SE3(np.eye(3), tref)]]
+        swingFootTask = []
+        for i in swingFootIds:
+            tref = target
+            swingFootTask += [[i, pinocchio.SE3(np.eye(3), tref)]]
 
-            comTask = comPos0
-            footSwingModel += [
-                self.createSwingFootModel(timeStep, supportFootIds, comTask=comTask, swingFootTask=swingFootTask)
-            ]
+        comTask = comPos0
+        footSwingModel += [
+            self.createSwingFootModel(timeStep, supportFootIds, comTask=comTask, swingFootTask=swingFootTask)
+        ]
 
-        return footSwingModel 
+        footSwitchModel = self.createFootSwitchModel(supportFootIds, swingFootTask)
+
+        return footSwingModel # [footSwitchModel]
 
     def createSwingFootModel(self, timeStep, supportFootIds, comTask=None, swingFootTask=None):
         """ Action model for a swing foot phase.
