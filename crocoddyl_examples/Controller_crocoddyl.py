@@ -84,6 +84,10 @@ class Controller:
         self._solver.solve(xs, us, 100, False, 0.1)
 
         self.results.ocp_storage['xs'] += [np.array(self._solver.xs.tolist())]
+        self.results.ocp_storage['fw'] += [self.get_croco_forces()]
+        self.results.ocp_storage['us'] += [np.array(self._solver.us.tolist())]
+        self.results.ocp_storage['xs'] += [np.array(self._solver.xs.tolist())]
+
 
         """ self.ocp.solve(guess=self.warmstart)
         _, x, a, u, f, fw = self.ocp.get_results()  
@@ -105,7 +109,20 @@ class Controller:
         self.results.ocp_storage['residuals']['inf_pr'] += [self.ocp.opti.stats()['iterations']['inf_pr']]
         self.results.ocp_storage['residuals']['inf_du'] += [self.ocp.opti.stats()['iterations']['inf_du']] """
 
-            
+    def get_croco_forces(self):
+        d = self._solver.problem.runningDatas[0]
+        cnames = d.differential.multibody.contacts.contacts.todict().keys()
+        forces = {n : [] for n in cnames}
+
+        for m in self._solver.problem.runningDatas:
+            mdict = m.differential.multibody.contacts.contacts.todict()
+            for n in cnames:
+                if n in mdict:
+                    forces[n] += [(mdict[n].jMf.inverse()*mdict[n].f).linear]
+                else:
+                    forces[n] += [np.array([0,0,0])]
+        for f in forces: forces[f] = np.array(forces[f])
+        return forces
 
 
 

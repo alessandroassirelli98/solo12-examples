@@ -21,7 +21,6 @@ def tuple_to_array(tup):
     a = np.array([element for tupl in tup for element in tupl])
     return a
 
-
 def control_loop(ctrl):
 
     ctrl.create_target(0)
@@ -29,12 +28,10 @@ def control_loop(ctrl):
 
 
 if __name__ == '__main__':
-    ctrl = Controller(30, 60, dt_ocp)
+    ctrl = Controller(5, 50, dt_ocp)
     local_res = Results()
 
-    #p.startStateLogging( p.STATE_LOGGING_VIDEO_MP4, 'video.mp4' )
     control_loop(ctrl)
-    #p.stopStateLogging(0)
 
     local_res.x_m = np.array(local_res.x_m)
 
@@ -50,4 +47,4 @@ if __name__ == '__main__':
     #viz.play(local_res.x_m[:, :19].T, dt_sim) # SHOW PYBULLET SIMULATION
 
 
-    #plot_ocp(ctrl, ctrl.results, local_res, 0.001)
+    plot_ocp(ctrl, ctrl.results, local_res, 0.001)

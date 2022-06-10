@@ -1,6 +1,8 @@
 import crocoddyl
 import pinocchio
 import numpy as np
+from . import parameters_conf as conf
+
 
 class SimpleManipulationProblem:
     def __init__(self, rmodel, lfFoot, rfFoot, lhFoot, rhFoot, integrator='euler', control='zero'):
@@ -50,12 +52,6 @@ class SimpleManipulationProblem:
         """ Create a shooting problem for a simple walking gait.
 
         :param x0: initial state
-        :param stepLength: step length
-        :param stepHeight: step height
-        :param timeStep: step time for each knot
-        :param stepKnots: number of knots for step phases
-        :param supportKnots: number of knots for double support phases
-        :return shooting problem
         """
         # Compute the current foot positions
         q0 = x0[:self.state.nq]
@@ -72,7 +68,7 @@ class SimpleManipulationProblem:
         freeIds = []
         contactSequence = [ self.patternToId(p) for p in gait ]
 
-        T = len(gait)-1
+        self.T = T = len(gait)-1
         model = []
         
         for t in range(T):
@@ -146,32 +142,22 @@ class SimpleManipulationProblem:
             #forceActivation = crocoddyl.ActivationModelQuadraticBarrier(crocoddyl.ActivationBounds(-1000, 0))
             frictionCone = crocoddyl.CostModelResidual(self.state, coneActivation, coneResidual)
             #force = crocoddyl.CostModelResidual(self.state, forceActivation, forceResidual)
-            costModel.addCost(self.rmodel.frames[i].name + "_frictionCone", frictionCone, 1e8)
+            costModel.addCost(self.rmodel.frames[i].name + "_frictionCone", frictionCone, conf.friction_cone_w)
             #costModel.addCost(self.rmodel.frames[i].name + "_unilateral", force, 1e5)
         if swingFootTask is not None:
             for i in swingFootTask:
                 frameTranslationResidual = crocoddyl.ResidualModelFrameTranslation(self.state, i[0], i[1].translation,
                                                                                    nu)
                 footTrack = crocoddyl.CostModelResidual(self.state, frameTranslationResidual)
-                costModel.addCost(self.rmodel.frames[i[0]].name + "_footTrack", footTrack, 1e4)
-
-        stateWeights = np.array([0] * 3 \
-                                + [1e1] * 3 \
-                                + [1e0] * 3 \
-                                + [1e-2] * 3\
-                                + [1e0] * 6
-                                + [0] * 6 \
-                                + [1e1] * 3 \
-                                + [1e0] * 3\
-                                + [1e1] * 6    )      
+                costModel.addCost(self.rmodel.frames[i[0]].name + "_footTrack", footTrack, conf.foot_tracking_w)
 
         stateResidual = crocoddyl.ResidualModelState(self.state, self.rmodel.defaultState, nu)
-        stateActivation = crocoddyl.ActivationModelWeightedQuad(stateWeights**2)
+        stateActivation = crocoddyl.ActivationModelWeightedQuad(conf.state_reg_w**2)
         ctrlResidual = crocoddyl.ResidualModelControl(self.state, self.u_ref)
         stateReg = crocoddyl.CostModelResidual(self.state, stateActivation, stateResidual)
         ctrlReg = crocoddyl.CostModelResidual(self.state, ctrlResidual)
-        costModel.addCost("stateReg", stateReg, 1e0)
-        costModel.addCost("ctrlReg", ctrlReg, 1e1)
+        costModel.addCost("stateReg", stateReg, 1)
+        costModel.addCost("ctrlReg", ctrlReg, conf.control_reg_w)
 
         lb = np.concatenate([self.state.lb[1:self.state.nv + 1], self.state.lb[-self.state.nv:]])
         ub = np.concatenate([self.state.ub[1:self.state.nv + 1], self.state.ub[-self.state.nv:]])
@@ -185,7 +171,7 @@ class SimpleManipulationProblem:
             terminalVelocityResidual = crocoddyl.ResidualModelFrameVelocity(self.state, baseId, 
                                                                     pinocchio.Motion.Zero(), pinocchio.LOCAL, nu)
             terminalVelocityCost = crocoddyl.CostModelResidual(self.state, terminalVelocityResidual)
-            costModel.addCost("terminalCost", terminalVelocityCost, 1e5)
+            costModel.addCost("terminalCost", terminalVelocityCost, conf.terminal_velocity_w)
 
         # Creating the action model for the KKT dynamics with simpletic Euler
         # integration scheme
@@ -203,7 +189,7 @@ class SimpleManipulationProblem:
             model = crocoddyl.IntegratedActionModelEuler(dmodel, self.control, timeStep)
         return model
 
-
+'''
     def createFootSwitchModel(self, supportFootIds, swingFootTask, pseudoImpulse=False):
         """ Action model for a foot switch phase.
 
@@ -315,6 +301,7 @@ class SimpleManipulationProblem:
         return model        # Action model for the foot switch
         #footSwitchModel = self.createFootSwitchModel(supportFootIds, swingFootTask)
 
+'''
 
 def plotSolution(solver, bounds=True, figIndex=1, figTitle="", show=True):
     import matplotlib.pyplot as plt

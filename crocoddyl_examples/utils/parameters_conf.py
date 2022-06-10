@@ -1,5 +1,6 @@
 import numpy as np
-import example_robot_data as robex
+
+
 # OCP parameters
 mu = 0.7
 

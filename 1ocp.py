@@ -64,20 +64,18 @@ def control_loop(ctrl):
     measures = read_state()
 
     ctrl.create_target(0)
-    ctrl.compute_step(measures['x_m'], ctrl.x0, ctrl.u0)
+    ctrl.compute_step(ctrl.x0, ctrl.x0, ctrl.u0)
 
     send_torques()
 
 
 if __name__ == '__main__':
-    ctrl = Controller(5, 50, dt_ocp)
+    ctrl = Controller(5, 30, dt_ocp)
     local_res = Results()
     device = Init_simulation(ctrl.qj0)
     store_measures()
 
-    #p.startStateLogging( p.STATE_LOGGING_VIDEO_MP4, 'video.mp4' )
     control_loop(ctrl)
-    #p.stopStateLogging(0)
 
     local_res.x_m = np.array(local_res.x_m)
 
@@ -89,7 +87,7 @@ if __name__ == '__main__':
     except:
         print("No viewer"  )
 
-    viz.play(ctrl.results.ocp_storage['xs'][1][:, :19].T, dt_ocp) # SHOW OCP RESULTS
+    viz.play(ctrl.results.ocp_storage['xs'][1][:, :19].T, dt_ocp) # SHOW OCP RESULT
     #viz.play(local_res.x_m[:, :19].T, dt_sim) # SHOW PYBULLET SIMULATION
 
 

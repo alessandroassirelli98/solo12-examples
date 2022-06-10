@@ -11,7 +11,6 @@ import os
 
 plt.style.use('seaborn')
 path = os.getcwd()
-
 class ShootingNode():
     def __init__(self, cmodel, model, q0, allContactIds, contactIds, dt, solver_type = 'ipopt'):
         
@@ -22,6 +21,7 @@ class ShootingNode():
 
         self.baseId = baseId = model.getFrameId('base_link')
         
+        self.cmodel = cmodel
         self.cdata = cdata = cmodel.createData()
         data = model.createData()
 
@@ -173,7 +173,7 @@ class ShootingNode():
             R = self.Rfeet[stFoot](self.x)
             f_ = self.fs[i]
             fw = R @ f_
-            ineq.append(-fw[2] + self.robotweight/ (4*len(self.contactIds)) )
+            ineq.append(-fw[2] )
             ineq.append( fw[0] - conf.mu*fw[2] )
             ineq.append( -fw[0] - conf.mu*fw[2] )
             ineq.append(  fw[1] - conf.mu*fw[2] )
@@ -197,27 +197,28 @@ class ShootingNode():
             R = self.Rfeet[stFoot](self.x)
             f_ = self.fs[i]
             fw = R @ f_
-            self.cost += conf.force_reg_weight * casadi.sumsqr(fw[2] - \
+            self.cost += conf.force_reg_w * casadi.sumsqr(fw[2] - \
                                                 self.robotweight/len(self.contactIds)) * self.dt
     
     def control_cost(self, u_ref):
-        self.cost += conf.control_weight *casadi.sumsqr(self.u - u_ref) *self.dt
+        self.cost += 1/2 * conf.control_reg_w *casadi.sumsqr(self.u - u_ref) *self.dt
 
     def body_reg_cost(self, x_ref):
-        self.cost +=  casadi.sumsqr(conf.base_reg_cost *(self.x[3:7] - x_ref[3:7])) * self.dt
+        """ self.cost +=  casadi.sumsqr(conf.base_reg_cost *(self.x[3:7] - x_ref[3:7])) * self.dt
         #self.cost += conf.base_reg_cost * casadi.sumsqr( self.log3(self.baseRotation(self.x), self.baseRotation(x_ref)) ) * self.dt
         self.cost += casadi.sumsqr(conf.joints_reg_cost * (self.x[7 : self.nq] - x_ref[7: self.nq])) *self.dt
-        self.cost += casadi.sumsqr(conf.joints_vel_reg_cost * (self.x[self.nq + 6: ] - x_ref[self.nq + 6:])) *self.dt
+        self.cost += casadi.sumsqr(conf.joints_vel_reg_cost * (self.x[self.nq + 6: ] - x_ref[self.nq + 6:])) *self.dt """
+        self.cost += 1/2 * casadi.sumsqr(conf.state_reg_w**2 * self.difference(self.x, x_ref))
 
     def target_cost(self, target):
         # I am Assuming just FR FOOt to be free
         for sw_foot in self.freeIds:
-            self.cost += casadi.sumsqr(conf.foot_tracking_cost *
+            self.cost += 1/2 *casadi.sumsqr(conf.foot_tracking_w *
                                    (self.feet[sw_foot](self.x) - target)) * self.dt
       
     def compute_cost(self, x_ref, u_ref, target):
         self.cost = 0
-        self.force_reg_cost()
+        #self.force_reg_cost()
         self.control_cost(u_ref)
         self.body_reg_cost(x_ref=x_ref)
         self.target_cost(target)
@@ -264,7 +265,7 @@ class OCP():
     def patternToId(self, gait):
         return tuple(self.allContactIds[i] for i,c in enumerate(gait) if c==1 )
     
-    def warmstart(self, guess=None):   
+    def warmstart(self, guess=None):           
         for g in guess:
             if guess[g] == []:
                 print("No warmstart provided")         
@@ -392,13 +393,13 @@ class OCP():
 
             ineq.append(self.runningModels[t].constraint_swing_feet_ineq(x_ref=self.x_ref)) 
             ineq.append(self.runningModels[t].constraint_standing_feet_ineq())
-            #ineq.append(self.us[t] - self.effort_limit)
-            #ineq.append(-self.us[t] - self.effort_limit)
+            ineq.append(self.us[t] - self.effort_limit)
+            ineq.append(-self.us[t] - self.effort_limit)
 
             totalcost += rcost
 
         #eq.append(self.xs[self.T][self.terminalModel.nq :])
-        totalcost += conf.terminal_cost * casadi.sumsqr(self.xs[self.T][self.terminalModel.nq:]) * self.dt
+        totalcost += conf.terminal_velocity_w * casadi.sumsqr(self.xs[self.T][self.terminalModel.nq:]) * self.dt
 
         eq_constraints = casadi.vertcat(*eq)
         ineq_constraints = casadi.vertcat(*ineq)
@@ -430,8 +431,8 @@ class OCP():
         
 
         p_opts = {}
-        s_opts = {"tol": 1e-4,
-            "acceptable_tol":1e-4,
+        s_opts = {"tol": 1e-8,
+            "acceptable_tol":1e-8,
             #"max_iter": 21,
             #"compl_inf_tol": 1e-2,
             #"constr_viol_tol": 1e-2
