@@ -48,7 +48,7 @@ class SimpleManipulationProblem:
     def patternToId(self, gait):
         return [self.allContactsIds[i] for i,c in enumerate(gait) if c==1 ]
 
-    def createMovingFootProblem(self, x0, u_ref, gait, target, timeStep,):
+    def createMovingFootProblem(self, x0, x_ref, u_ref, gait, target, timeStep,):
         """ Create a shooting problem for a simple walking gait.
 
         :param x0: initial state
@@ -64,6 +64,7 @@ class SimpleManipulationProblem:
         comRef = (rfFootPos0 + rhFootPos0 + lfFootPos0 + lhFootPos0) / 4
         comRef[2] = pinocchio.centerOfMass(self.rmodel, self.rdata, q0)[2].item()
         self.u_ref = u_ref
+        self.x_ref = x_ref
         
         freeIds = []
         contactSequence = [ self.patternToId(p) for p in gait ]
@@ -134,44 +135,49 @@ class SimpleManipulationProblem:
         # Creating the cost model for a contact phase
         costModel = crocoddyl.CostModelSum(self.state, nu)
 
-        for i in supportFootIds:
-            cone = crocoddyl.FrictionCone(self.Rsurf, self.mu, 4, False)
-            coneResidual = crocoddyl.ResidualModelContactFrictionCone(self.state, i, cone, nu)
-            #forceResidual = crocoddyl.ResidualModelContactForce(self.state, i, np.array([0,0,4]), 3, nu)
-            coneActivation = crocoddyl.ActivationModelQuadraticBarrier(crocoddyl.ActivationBounds(cone.lb, cone.ub))
-            #forceActivation = crocoddyl.ActivationModelQuadraticBarrier(crocoddyl.ActivationBounds(-1000, 0))
-            frictionCone = crocoddyl.CostModelResidual(self.state, coneActivation, coneResidual)
-            #force = crocoddyl.CostModelResidual(self.state, forceActivation, forceResidual)
-            costModel.addCost(self.rmodel.frames[i].name + "_frictionCone", frictionCone, conf.friction_cone_w)
-            #costModel.addCost(self.rmodel.frames[i].name + "_unilateral", force, 1e5)
-        if swingFootTask is not None:
-            for i in swingFootTask:
-                frameTranslationResidual = crocoddyl.ResidualModelFrameTranslation(self.state, i[0], i[1].translation,
-                                                                                   nu)
-                footTrack = crocoddyl.CostModelResidual(self.state, frameTranslationResidual)
-                costModel.addCost(self.rmodel.frames[i[0]].name + "_footTrack", footTrack, conf.foot_tracking_w)
+        if not isTerminal:
 
-        stateResidual = crocoddyl.ResidualModelState(self.state, self.rmodel.defaultState, nu)
-        stateActivation = crocoddyl.ActivationModelWeightedQuad(conf.state_reg_w**2)
-        ctrlResidual = crocoddyl.ResidualModelControl(self.state, self.u_ref)
-        stateReg = crocoddyl.CostModelResidual(self.state, stateActivation, stateResidual)
-        ctrlReg = crocoddyl.CostModelResidual(self.state, ctrlResidual)
-        costModel.addCost("stateReg", stateReg, 1)
-        costModel.addCost("ctrlReg", ctrlReg, conf.control_reg_w)
+            for i in supportFootIds:
+                cone = crocoddyl.FrictionCone(self.Rsurf, self.mu, 4, False)
+                coneResidual = crocoddyl.ResidualModelContactFrictionCone(self.state, i, cone, nu)
+                #forceResidual = crocoddyl.ResidualModelContactForce(self.state, i, np.array([0,0,4]), 3, nu)
+                coneActivation = crocoddyl.ActivationModelQuadraticBarrier(crocoddyl.ActivationBounds(cone.lb, cone.ub))
+                #forceActivation = crocoddyl.ActivationModelQuadraticBarrier(crocoddyl.ActivationBounds(-1000, 0))
+                frictionCone = crocoddyl.CostModelResidual(self.state, coneActivation, coneResidual)
+                #force = crocoddyl.CostModelResidual(self.state, forceActivation, forceResidual)
+                costModel.addCost(self.rmodel.frames[i].name + "_frictionCone", frictionCone, conf.friction_cone_w)
+                #costModel.addCost(self.rmodel.frames[i].name + "_unilateral", force, 1e5)
+            if swingFootTask is not None:
+                for i in swingFootTask:
+                    frameTranslationResidual = crocoddyl.ResidualModelFrameTranslation(self.state, i[0], i[1].translation,
+                                                                                    nu)
+                    footTrack = crocoddyl.CostModelResidual(self.state, frameTranslationResidual)
+                    costModel.addCost(self.rmodel.frames[i[0]].name + "_footTrack", footTrack, conf.foot_tracking_w)
 
-        lb = np.concatenate([self.state.lb[1:self.state.nv + 1], self.state.lb[-self.state.nv:]])
+            ctrlResidual = crocoddyl.ResidualModelControl(self.state, self.u_ref)    
+            ctrlReg = crocoddyl.CostModelResidual(self.state, ctrlResidual) 
+            costModel.addCost("ctrlReg", ctrlReg, conf.control_reg_w)
+
+            stateResidual = crocoddyl.ResidualModelState(self.state, self.x_ref , nu)
+            stateActivation = crocoddyl.ActivationModelWeightedQuad(conf.state_reg_w**2)
+            stateReg = crocoddyl.CostModelResidual(self.state, stateActivation, stateResidual)
+            costModel.addCost("stateReg", stateReg, 1)
+
+    
+
+        """ lb = np.concatenate([self.state.lb[1:self.state.nv + 1], self.state.lb[-self.state.nv:]])
         ub = np.concatenate([self.state.ub[1:self.state.nv + 1], self.state.ub[-self.state.nv:]])
         stateBoundsResidual = crocoddyl.ResidualModelState(self.state, nu)
         stateBoundsActivation = crocoddyl.ActivationModelQuadraticBarrier(crocoddyl.ActivationBounds(lb, ub))
         stateBounds = crocoddyl.CostModelResidual(self.state, stateBoundsActivation, stateBoundsResidual)
-        costModel.addCost("stateBounds", stateBounds, 1e3)
+        costModel.addCost("stateBounds", stateBounds, 1e3) """
 
-        if(isTerminal):
+        """ if(isTerminal):
             baseId = self.rmodel.getFrameId('base_link')
             terminalVelocityResidual = crocoddyl.ResidualModelFrameVelocity(self.state, baseId, 
-                                                                    pinocchio.Motion.Zero(), pinocchio.LOCAL, nu)
+                                                                    pinocchio.Motion.Zero(), pinocchio.WORLD, nu)
             terminalVelocityCost = crocoddyl.CostModelResidual(self.state, terminalVelocityResidual)
-            costModel.addCost("terminalCost", terminalVelocityCost, conf.terminal_velocity_w)
+            costModel.addCost("terminalCost", terminalVelocityCost, conf.terminal_velocity_w) """
 
         # Creating the action model for the KKT dynamics with simpletic Euler
         # integration scheme

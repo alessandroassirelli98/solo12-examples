@@ -1,8 +1,6 @@
-from zmq import XPUB_WELCOME_MSG
-import crocoddyl
 from utils.loader import Solo12
 import numpy as np
-import utils.ocp_manipulation_crocoddyl as ocp
+import utils.ocp_manipulation_ipopt_soft as optimalControlProblem
 
 class Results:
     def __init__(self):
@@ -24,9 +22,6 @@ class Controller:
 
         self.solo = Solo12()
         self.results = Results()
-
-        self.x = None
-        self.u = None
 
         self.nq = self.solo.nq 
         nv = self.solo.nv
@@ -53,9 +48,6 @@ class Controller:
             + [ [ 1,1,1,1 ] ] * init_steps \
             + [ [ 1,0,1,1 ] ] * target_steps
 
-        lfFoot, rfFoot, lhFoot, rhFoot = 'FL_FOOT', 'FR_FOOT', 'HL_FOOT', 'HR_FOOT'
-        self.ocp = ocp.SimpleManipulationProblem(self.solo.model, lfFoot, rfFoot, lhFoot, rhFoot )
-
     def create_target(self, t_):
         # Here we create the target of the control
         # FR Foot moving in a circular way
@@ -75,37 +67,18 @@ class Controller:
         self.gait += [self.gait[-1]]
 
     def compute_step(self, x0, x_ref, u_ref, guess=None):
-        problem = self.ocp.createMovingFootProblem(self.x0, x_ref, u_ref, self.gait, self.target, self.dt)
+        self.ocp = optimalControlProblem.OCP(robot=self.solo, gait=self.gait, x0=x0, x_ref=x_ref,\
+                                    u_ref = u_ref, target=self.target, dt=self.dt)
 
-        self._solver = crocoddyl.SolverDDP(problem)
+        if guess:
+            self.warmstart['xs'] = guess['xs']
+            self.warmstart['acs'] = guess['acs']
+            self.warmstart['us'] = guess['us']
+            self.warmstart['fs'] = guess['fs']
 
-        # Solve the DDP problem
-        print('*** SOLVE ***')
-        self._solver.setCallbacks([crocoddyl.CallbackVerbose()])
+        self.ocp.solve(guess=self.warmstart)
+        _, x, a, u, f, fw = self.ocp.get_results()
 
-        if not self.x:
-            self.x = [x0] * (self._solver.problem.T + 1)
-            self.u = self._solver.problem.quasiStatic([x0] * self._solver.problem.T)
-            
-        self._solver.solve(self.x, self.u, 100, False, 0.1)
-
-        x =  self._solver.xs.tolist()
-        self.x = x[1:] + [x[-1]]
-        u =  self._solver.us.tolist()
-        self.u = u[1:] + [u[-1]]
-        
-        self.warmstart['xs'] = self._solver.xs[1:]
-        self.warmstart['us'] = self._solver.us[1:]
-
-        self.results.ocp_storage['xs'] += [np.array(self._solver.xs.tolist())]
-        self.results.ocp_storage['fw'] += [self.get_croco_forces()]
-        self.results.ocp_storage['us'] += [np.array(self._solver.us.tolist())]
-        self.results.ocp_storage['qj_des'] += [np.array(self._solver.xs.tolist())[:, 7: self.nq]]
-        self.results.ocp_storage['vj_des'] += [np.array(self._solver.xs.tolist())[:, self.nq + 6: ]]
-
-
-        """ self.ocp.solve(guess=self.warmstart)
-        _, x, a, u, f, fw = self.ocp.get_results()  
         self.warmstart['xs'] = x[1:]
         self.warmstart['acs'] = a[1:]
         self.warmstart['us'] = u[1:]
@@ -122,38 +95,10 @@ class Controller:
         self.results.tau_ff += [u[0]]
 
         self.results.ocp_storage['residuals']['inf_pr'] += [self.ocp.opti.stats()['iterations']['inf_pr']]
-        self.results.ocp_storage['residuals']['inf_du'] += [self.ocp.opti.stats()['iterations']['inf_du']] """
+        self.results.ocp_storage['residuals']['inf_du'] += [self.ocp.opti.stats()['iterations']['inf_du']]
 
-    def get_croco_forces(self):
-        d = self._solver.problem.runningDatas[0]
-        cnames = d.differential.multibody.contacts.contacts.todict().keys()
-        forces = {n : [] for n in cnames}
+            
 
-        for m in self._solver.problem.runningDatas:
-            mdict = m.differential.multibody.contacts.contacts.todict()
-            for n in cnames:
-                if n in mdict:
-                    forces[n] += [(mdict[n].jMf.inverse()*mdict[n].f).linear]
-                else:
-                    forces[n] += [np.array([0,0,0])]
-        for f in forces: forces[f] = np.array(forces[f])
-        return forces
-
-    def get_croco_forces_ws(self):
-        forces = []
-
-        for m in self._solver.problem.runningDatas:
-            mdict = m.differential.multibody.contacts.contacts.todict()
-            f_tmp = []
-            for n in mdict:
-                f_tmp += [(mdict[n].jMf.inverse()*mdict[n].f).linear]
-            forces += [np.concatenate(f_tmp)]
-        return forces
-
-    def get_croco_acc(self):
-        acc = []
-        [acc.append(m.differential.xout) for m in self._solver.problem.runningDatas ]
-        return acc
 
 
 

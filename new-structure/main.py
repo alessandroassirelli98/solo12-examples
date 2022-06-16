@@ -1,14 +1,16 @@
+from ocp import SimpleManipulationProblem
+from problem import ProblemData
 from utils.PyBulletSimulator import PyBulletSimulator
 from pinocchio.visualize import GepettoVisualizer
-from utils.plot_utils import plot_mpc
-import matplotlib.pyplot as plt
 import numpy as np
-from Controller import Controller, Results
 
-horizon = 50
-dt_ocp = 0.015
+pd = ProblemData()
+
+horizon = 10
+dt_ocp = pd.dt
 dt_sim = 0.001
 r = int(dt_ocp/dt_sim)
+
 
 def Init_simulation(q_init):
     device = PyBulletSimulator()
@@ -43,14 +45,13 @@ def store_measures(all=True):
         local_res.tau += [device.jointTorques]
 
 def send_torques():
-    q, v = interpolate_traj(ctrl.results.qj_des[-1], ctrl.results.vj_des[-1])
-    local_res.tau_ff.append(ctrl.results.tau_ff[-1])
+    u = solver.results.ocp_storage['us'][-1][0]
+    x = solver.results.ocp_storage['xs'][-1][0]
+    K = solver._solver.K[0]
     for t in range(r):
-        device.joints.set_desired_positions(q[t])
-        device.joints.set_desired_velocities(v[t])
-        device.joints.set_position_gains(3)
-        device.joints.set_velocity_gains(0.1)
-        device.joints.set_torques(ctrl.results.tau_ff[-1])
+        m = read_state()
+        feedback = np.dot(K, solver.state.diff(m['x_m'], x))
+        device.joints.set_torques(u + feedback)
         device.send_command_and_wait_end_of_cycle()
 
         store_measures()
@@ -63,43 +64,24 @@ def get_mpc_sol():
 
 def control_loop(ctrl):
     for t in range(horizon):      
-        measures = read_state()
+        m = read_state()
         
-        ctrl.create_target(t)
+        pd.create_target(t)
         ctrl.shift_gate()
-        ctrl.compute_step(measures['x_m'], ctrl.x0, ctrl.u0)
+        solver.solve(m['x_m'], pd.x0, pd.u0)
         
-        send_torques()       
+        send_torques()   
+
+device = Init_simulation(pd.x0[: pd.nq])
+solver = SimpleManipulationProblem("crocoddyl", pd)
 
 
-if __name__ ==  '__main__':
-    ctrl = Controller(10, 25, dt_ocp)
-    local_res = Results()
-    device = Init_simulation(ctrl.qj0)
-    store_measures()
+try:
+    viz = GepettoVisualizer(pd.model, pd.robot.collision_model, pd.robot.visual_model)
+    viz.initViewer()
+    viz.loadViewerModel()
+    gv = viz.viewer.gui
+except:
+    print("No viewer"  )
 
-    control_loop(ctrl)
-    local_res.x_m = np.array(local_res.x_m)
-
-    plot_mpc(ctrl, ctrl.results, local_res, dt_sim)
-    
-    try:
-        viz = GepettoVisualizer(ctrl.solo.model,ctrl.solo.robot.collision_model, ctrl.solo.robot.visual_model)
-        viz.initViewer()
-        viz.loadViewerModel()
-        gv = viz.viewer.gui
-    except:
-        print("No viewer")
-    
-
-    viz.play(get_mpc_sol().T, dt_ocp) # SHOW OCP RESULTS
-    #viz.play(local_res.x_m[:, :19].T, dt_sim) # SHOW PYBULLET SIMULATION
-
-
-    np.save(open('/tmp/sol_mpc.npy', "wb"),
-        {
-            "u_mpc": local_res.tau
-
-        })
-
-
+viz.play(solver.results.ocp_storage['xs'][0][:, :19].T, pd.dt) # SHOW OCP RESULT

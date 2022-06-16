@@ -1,13 +1,15 @@
-import pinocchio as pin
-from pinocchio import casadi as cpin
+import os
+from time import time
+
 import casadi
-import numpy as np
 import example_robot_data as robex
 import matplotlib.pyplot as plt
+import numpy as np
+import pinocchio as pin
+from pinocchio import casadi as cpin
 from pinocchio.visualize import GepettoVisualizer
-import ocp_parameters_conf as conf
-from time import time
-import os
+
+from . import parameters_conf as conf
 
 plt.style.use('seaborn')
 path = os.getcwd()
@@ -110,14 +112,14 @@ class ShootingNode():
                                                 pin.LOCAL_WORLD_ALIGNED ).linear])
                     for idf in allContactIds}
 
-    def init(self, x, a, u, fs):
+    def init(self, x, a=None, u=None, fs=None):
         self.x = x
         self.a = a
         self.u = u
         self.tau = casadi.vertcat( np.zeros(6), u )
         self.fs = fs
         
-    def calc(self, x_ref, u_ref, target):
+    def calc(self, x_ref, u_ref=None, target=None):
         '''
         This function return xnext,cost
         '''
@@ -166,20 +168,19 @@ class ShootingNode():
 
         return(casadi.vertcat(*eq))
             
-    def constraint_standing_feet_ineq(self):
+    def constraint_standing_feet_cost(self):
         # Friction cone
+        cf = 0
         ineq = []
         for i, stFoot in enumerate(self.contactIds):
             R = self.Rfeet[stFoot](self.x)
             f_ = self.fs[i]
             fw = R @ f_
-            ineq.append(-fw[2] )
-            ineq.append( fw[0] - conf.mu*fw[2]  + self.robotweight/ (4*len(self.contactIds)) )
-            ineq.append( -fw[0] - conf.mu*fw[2] )
-            ineq.append(  fw[1] - conf.mu*fw[2] )
-            ineq.append( -fw[1] - conf.mu*fw[2] )
- 
-        return(casadi.vertcat(*ineq))
+            self.cost += conf.friction_cone_w * casadi.if_else(fw[2]>=1,0,(fw[2]-1)**2)/2 * self.dt
+            self.cost += conf.friction_cone_w*casadi.if_else(fw[0] > conf.mu*fw[2], (conf.mu*fw[2]-fw[0])**2, 0)/2* self.dt
+            self.cost += conf.friction_cone_w*casadi.if_else(fw[0] < -conf.mu*fw[2], (conf.mu*fw[2]+fw[0])**2, 0)/2* self.dt
+            self.cost += conf.friction_cone_w*casadi.if_else(fw[1] > conf.mu*fw[2], (conf.mu*fw[2]-fw[1])**2, 0)/2* self.dt
+            self.cost += conf.friction_cone_w*casadi.if_else(fw[1] < -conf.mu*fw[2], (conf.mu*fw[2]+fw[1])**2, 0)/2* self.dt
 
     def constraint_dynamics_eq(self):
         eq = []
@@ -197,27 +198,23 @@ class ShootingNode():
             R = self.Rfeet[stFoot](self.x)
             f_ = self.fs[i]
             fw = R @ f_
-            self.cost += conf.force_reg_w * casadi.sumsqr(fw[2] - \
+            self.cost += conf.force_reg_w * casadi.norm_2(fw[2] - \
                                                 self.robotweight/len(self.contactIds)) * self.dt
     
     def control_cost(self, u_ref):
-        self.cost += 1/2 * conf.control_reg_w *casadi.sumsqr(self.u - u_ref) *self.dt
+        self.cost += 1/2*conf.control_reg_w * casadi.sumsqr(self.u - u_ref) *self.dt
 
     def body_reg_cost(self, x_ref):
-        """ self.cost +=  casadi.sumsqr(conf.base_reg_cost *(self.x[3:7] - x_ref[3:7])) * self.dt
-        #self.cost += conf.base_reg_cost * casadi.sumsqr( self.log3(self.baseRotation(self.x), self.baseRotation(x_ref)) ) * self.dt
-        self.cost += casadi.sumsqr(conf.joints_reg_cost * (self.x[7 : self.nq] - x_ref[7: self.nq])) *self.dt
-        self.cost += casadi.sumsqr(conf.joints_vel_reg_cost * (self.x[self.nq + 6: ] - x_ref[self.nq + 6:])) *self.dt """
-        self.cost += 1/2 * casadi.sumsqr(conf.state_reg_w**2 * self.difference(self.x, x_ref))
+        self.cost += 1/2 * casadi.sumsqr(conf.state_reg_w * self.difference(self.x, x_ref))* self.dt
 
     def target_cost(self, target):
         # I am Assuming just FR FOOt to be free
         for sw_foot in self.freeIds:
-            self.cost += 1/2 *casadi.sumsqr(conf.foot_tracking_w *
-                                   (self.feet[sw_foot](self.x) - target)) * self.dt
+            self.cost += 1/2 * conf.foot_tracking_w* casadi.sumsqr(self.feet[sw_foot](self.x) - target) * self.dt
       
     def compute_cost(self, x_ref, u_ref, target):
         self.cost = 0
+        #self.constraint_standing_feet_cost()
         #self.force_reg_cost()
         self.control_cost(u_ref)
         self.body_reg_cost(x_ref=x_ref)
@@ -228,9 +225,17 @@ class ShootingNode():
 
 
 class OCP():
-    def __init__(self, robot, gait, x0, x_ref, u_ref, target, dt = 0.015, solver='ipopt'):
+    def __init__(self, robot, gait, x0, x_ref, u_ref, target, dt = 0.015):
+        """Define an optimal ocntrol problem.
+        :param robot: Pinocchio RobotWrapper instance
+        :param gait: list of list containing contact pattern i.e. for two steps[ [1,1,1,1], [1,0,0,1] ]. \
+            Its length determines the horizon of the ocp
+        :param x0: starting configuration
+        :param x_ref: reference configuration
+        :param target: array of target positions
+        :param dt: timestep integration
+        """
         
-        self.solver = solver
         self.dt = dt
 
 
@@ -271,53 +276,29 @@ class OCP():
                 print("No warmstart provided")         
                 return 0
         
-        if self.solver == 'ipopt':
-            try:
-                xs_g = guess['xs']
-                us_g = guess['us']
-                acs_g = guess['acs']
-                fs_g = guess['fs']
+        try:
+            xs_g = guess['xs']
+            us_g = guess['us']
+            acs_g = guess['acs']
+            fs_g = guess['fs']
 
-                def xdiff(x1,x2):
-                    nq = self.model.nq
-                    return np.concatenate([
-                        pin.difference(self.model,x1[:nq],x2[:nq]), x2[nq:]-x1[nq:] ])
+            def xdiff(x1,x2):
+                nq = self.model.nq
+                return np.concatenate([
+                    pin.difference(self.model,x1[:nq],x2[:nq]), x2[nq:]-x1[nq:] ])
 
-                for x,xg in zip(self.dxs,xs_g): self.opti.set_initial(x, xdiff(self.x0,xg))
-                for a,ag in zip(self.acs,acs_g): self.opti.set_initial(a, ag)
-                for u,ug in zip(self.us,us_g): self.opti.set_initial(u,ug)
-                for f, fg in zip(self.fs, fs_g):
-                    fgsplit = np.split(fg, len(f))
-                    fgc = []
-                    [fgc.append(f) for f in fgsplit]
-                    [self.opti.set_initial(f[i], fgc[i]) for i in range(len(f))]
-                print("Got warm start")
-            except:
-                print("Can't load warm start")
-
-        if self.solver == 'proxnlp':
-            xinit = self.pb_space.neutral()
-            try:
-                dxs_g = guess['dxs']
-                us_g = guess['us']
-                acs_g = guess['acs']
-                fs_g = guess['fs']
-                
-                x_guess = []
-                for i,g in enumerate([dxs_g, acs_g, us_g, fs_g]):
-                    if i != 3:
-                        x_tmp = np.concatenate([g, np.zeros((1, g.shape[1]))])
-                    else: # if loading forces
-                        x_tmp = np.concatenate([g, np.zeros((1,6))])
-                    x_guess.append(casadi.vertcat(*x_tmp))
-                    x_tmp = []
-                xinit = casadi.vertcat(*x_guess).full()[:, 0]
-                print("Got warm start")
-            except:
-                print("Can't load warm start")
-            
-            self.xinit = xinit
-            
+            for x,xg in zip(self.dxs,xs_g): self.opti.set_initial(x, xdiff(self.x0,xg))
+            for a,ag in zip(self.acs,acs_g): self.opti.set_initial(a, ag)
+            for u,ug in zip(self.us,us_g): self.opti.set_initial(u,ug)
+            for f, fg in zip(self.fs, fs_g):
+                fgsplit = np.split(fg, len(f))
+                fgc = []
+                [fgc.append(f) for f in fgsplit]
+                [self.opti.set_initial(f[i], fgc[i]) for i in range(len(f))]
+            print("Got warm start")
+        except:
+            print("Can't load warm start")
+           
     def get_results(self):
         dxs_sol = np.array([self.opti.value(dx) for dx in self.dxs])
         xs_sol = np.array([self.opti.value(x) for x in self.xs])
@@ -374,7 +355,11 @@ class OCP():
         return feet_log
 
     def get_base_log(self, xs_sol):
+        """ Get the base positions computed durnig one ocp
         
+        :param xs_sol: Array of dimension [n_steps, n_states]
+        
+        """
         base_pos_log = []
         [base_pos_log.append(self.terminalModel.baseTranslation(xs_sol[i]).full()[:,0]) for i in range(len(xs_sol))]
         base_pos_log = np.array(base_pos_log)
@@ -388,7 +373,7 @@ class OCP():
         eq.append(self.dxs[0])
         for t in range(self.T):
             print(self.contactSequence[t])
-            self.runningModels[t].init(self.xs[t], self.acs[t], self.us[t], self.fs[t])
+            self.runningModels[t].init(self.xs[t], self.acs[t], self.us[t], self.fs[t]) # These change every time! Do not use runningModels[0].x to get the state!!!! use xs[0]
 
             if (self.contactSequence[t] != self.contactSequence[t-1] and t >= 1): # If it is landing
                 print('Contact on ', str(self.runningModels[t].contactIds)) 
@@ -401,20 +386,19 @@ class OCP():
             eq.append(self.runningModels[t].constraint_dynamics_eq() )
             eq.append( self.runningModels[t].difference(self.xs[t + 1],xnext) - np.zeros(2*self.runningModels[t].nv) )
 
-            ineq.append(self.runningModels[t].constraint_swing_feet_ineq(x_ref=self.x_ref)) 
-            ineq.append(self.runningModels[t].constraint_standing_feet_ineq())
-            ineq.append(self.us[t] - self.effort_limit)
-            ineq.append(-self.us[t] - self.effort_limit)
+            """ ineq.append(self.us[t] - self.effort_limit)
+            ineq.append(-self.us[t] - self.effort_limit) """
 
             totalcost += rcost
 
         #eq.append(self.xs[self.T][self.terminalModel.nq :])
-        totalcost += conf.terminal_velocity_w * casadi.sumsqr(self.xs[self.T][self.terminalModel.nq:]) * self.dt
+        #self.terminalModel.init(self.xs[self.T],  self.acs[t], self.us[t], self.fs[t]) # Only xs[T] matters!
+        #totalcost += self.terminalModel.calc(self.x_ref, self.u_ref, self.target[self.T])[1]
+        #totalcost += 1/2*conf.terminal_velocity_w * casadi.sumsqr(self.xs[self.T][self.terminalModel.nq:]) * self.dt
 
         eq_constraints = casadi.vertcat(*eq)
-        ineq_constraints = casadi.vertcat(*ineq)
 
-        return totalcost, eq_constraints, ineq_constraints
+        return totalcost, eq_constraints
 
     def use_ipopt_solver(self, guess = None):
 
@@ -431,18 +415,17 @@ class OCP():
             self.fs.append(f_tmp)
         self.fs = self.fs
 
-        cost, eq_constraints, ineq_constraints = self.make_ocp()
+        self.cost, eq_constraints = self.make_ocp()
 
-        opti.minimize(cost)
+        opti.minimize(self.cost)
 
         opti.subject_to(eq_constraints == 0)
-        opti.subject_to(ineq_constraints <= 0)
 
         
 
         p_opts = {}
-        s_opts = {"tol": 1e-8,
-            "acceptable_tol":1e-8,
+        s_opts = {"tol": 1e-3,
+            "acceptable_tol":1e-3,
             #"max_iter": 21,
             #"compl_inf_tol": 1e-2,
             #"constr_viol_tol": 1e-2
@@ -459,13 +442,47 @@ class OCP():
         opti.solve_limited()
     
     def solve(self, guess=None):
+        """ Solve the NLP
+        :param guess: ditctionary in the form: {'xs':array([T+1, n_states]), 'acs':array([T, nv]),\
+            'us':array([T, nu]), 'fs': [array([T, nv]),]}
+        """
 
         self.runningModels = [ self.casadiActionModels[self.contactSequence[t]] for t in range(self.T) ]
         self.terminalModel = self.casadiActionModels[self.contactSequence[self.T]]
 
         start_time = time() 
-        if self.solver == 'ipopt':
-            print("Using IPOPT")
-            self.use_ipopt_solver(guess)
+
+        self.use_ipopt_solver(guess)
 
         self.iterationTime = time() - start_time
+
+    def sanity_check_constraints(self):
+    # Check that all constraints are respected
+        dx, xs, acs, us, fs, _ = self.get_results()
+        for t,(m,x1,u,f,x2) in enumerate(zip(self.runningModels, xs[:-1], us, fs, xs[1:])):
+            tau = np.concatenate([np.zeros(6),u])
+            q1,v1 = x1[:self.nq],x1[self.nq:]
+
+            vecfs = pin.StdVec_Force()
+            for __j in self.model.joints:
+                vecfs.append(pin.Force.Zero())
+            for i,idf in enumerate(m.contactIds):
+                frame = self.model.frames[idf]
+                vecfs[frame.parentJoint] = frame.placement * pin.Force(f[i])
+
+            a = pin.aba(self.model, self.data,x1[:self.nq],x1[self.nq:],tau,vecfs)
+            ha.append(a.copy())
+            vnext = v1+a*m.dt
+            qnext = pin.integrate(self.model,q1,vnext*m.dt)
+            xnext = np.concatenate([qnext,vnext])
+            if not( np.linalg.norm(xnext-x2) < 1e-5 ):
+                print('Error: inconsistant trajectory xnext!=x+f(x,u)')
+
+
+            ### Check 0 velocity of contact points
+            pin.forwardKinematics(model,data,q1,v1,a)
+            pin.updateFramePlacements(model,data)
+            for idf in m.contactIds:
+                vf = pin.getFrameVelocity(model,data,idf)
+                af = pin.getFrameAcceleration(model,data,idf,pin.LOCAL_WORLD_ALIGNED).vector
+                if not ( sum(af**2) < 1e-5 ): print("Warning with af**2")

@@ -5,7 +5,7 @@ import numpy as np
 import example_robot_data as robex
 import matplotlib.pyplot as plt
 from pinocchio.visualize import GepettoVisualizer
-import ocp_parameters_conf as conf
+from . import parameters_conf as conf
 from time import time
 import os
 
@@ -173,8 +173,8 @@ class ShootingNode():
             R = self.Rfeet[stFoot](self.x)
             f_ = self.fs[i]
             fw = R @ f_
-            ineq.append(-fw[2] )
-            ineq.append( fw[0] - conf.mu*fw[2]  + self.robotweight/ (4*len(self.contactIds)) )
+            ineq.append(- fw[2])
+            ineq.append(  fw[0] -  conf.mu*fw[2] )
             ineq.append( -fw[0] - conf.mu*fw[2] )
             ineq.append(  fw[1] - conf.mu*fw[2] )
             ineq.append( -fw[1] - conf.mu*fw[2] )
@@ -197,24 +197,23 @@ class ShootingNode():
             R = self.Rfeet[stFoot](self.x)
             f_ = self.fs[i]
             fw = R @ f_
-            self.cost += conf.force_reg_w * casadi.sumsqr(fw[2] - \
+            self.cost += conf.force_reg_w * casadi.norm_2(fw[2] - \
                                                 self.robotweight/len(self.contactIds)) * self.dt
     
     def control_cost(self, u_ref):
-        self.cost += 1/2 * conf.control_reg_w *casadi.sumsqr(self.u - u_ref) *self.dt
+        self.cost += 1/2 * conf.control_reg_w * casadi.sumsqr(self.u - u_ref) *self.dt
 
     def body_reg_cost(self, x_ref):
         """ self.cost +=  casadi.sumsqr(conf.base_reg_cost *(self.x[3:7] - x_ref[3:7])) * self.dt
         #self.cost += conf.base_reg_cost * casadi.sumsqr( self.log3(self.baseRotation(self.x), self.baseRotation(x_ref)) ) * self.dt
         self.cost += casadi.sumsqr(conf.joints_reg_cost * (self.x[7 : self.nq] - x_ref[7: self.nq])) *self.dt
         self.cost += casadi.sumsqr(conf.joints_vel_reg_cost * (self.x[self.nq + 6: ] - x_ref[self.nq + 6:])) *self.dt """
-        self.cost += 1/2 * casadi.sumsqr(conf.state_reg_w**2 * self.difference(self.x, x_ref))
+        self.cost += 1/2 * casadi.sumsqr(conf.state_reg_w * self.difference(self.x, x_ref))* self.dt
 
     def target_cost(self, target):
         # I am Assuming just FR FOOt to be free
         for sw_foot in self.freeIds:
-            self.cost += 1/2 *casadi.sumsqr(conf.foot_tracking_w *
-                                   (self.feet[sw_foot](self.x) - target)) * self.dt
+            self.cost += 1/2 * conf.foot_tracking_w* casadi.sumsqr(self.feet[sw_foot](self.x) - target) * self.dt
       
     def compute_cost(self, x_ref, u_ref, target):
         self.cost = 0
@@ -228,9 +227,17 @@ class ShootingNode():
 
 
 class OCP():
-    def __init__(self, robot, gait, x0, x_ref, u_ref, target, dt = 0.015, solver='ipopt'):
+    def __init__(self, robot, gait, x0, x_ref, u_ref, target, dt = 0.015):
+        """Define an optimal ocntrol problem.
+        :param robot: Pinocchio RobotWrapper instance
+        :param gait: list of list containing contact pattern i.e. for two steps[ [1,1,1,1], [1,0,0,1] ]. \
+            Its length determines the horizon of the ocp
+        :param x0: starting configuration
+        :param x_ref: reference configuration
+        :param target: array of target positions
+        :param dt: timestep integration
+        """
         
-        self.solver = solver
         self.dt = dt
 
 
@@ -266,58 +273,34 @@ class OCP():
         return tuple(self.allContactIds[i] for i,c in enumerate(gait) if c==1 )
     
     def warmstart(self, guess=None):           
-        for g in guess:
+        """ for g in guess:
             if guess[g] == []:
                 print("No warmstart provided")         
-                return 0
+                return 0 """
         
-        if self.solver == 'ipopt':
-            try:
-                xs_g = guess['xs']
-                us_g = guess['us']
-                acs_g = guess['acs']
-                fs_g = guess['fs']
+        try:
+            xs_g = guess['xs']
+            us_g = guess['us']
+            acs_g = guess['acs']
+            fs_g = guess['fs']
 
-                def xdiff(x1,x2):
-                    nq = self.model.nq
-                    return np.concatenate([
-                        pin.difference(self.model,x1[:nq],x2[:nq]), x2[nq:]-x1[nq:] ])
+            def xdiff(x1,x2):
+                nq = self.model.nq
+                return np.concatenate([
+                    pin.difference(self.model,x1[:nq],x2[:nq]), x2[nq:]-x1[nq:] ])
 
-                for x,xg in zip(self.dxs,xs_g): self.opti.set_initial(x, xdiff(self.x0,xg))
-                for a,ag in zip(self.acs,acs_g): self.opti.set_initial(a, ag)
-                for u,ug in zip(self.us,us_g): self.opti.set_initial(u,ug)
-                for f, fg in zip(self.fs, fs_g):
-                    fgsplit = np.split(fg, len(f))
-                    fgc = []
-                    [fgc.append(f) for f in fgsplit]
-                    [self.opti.set_initial(f[i], fgc[i]) for i in range(len(f))]
-                print("Got warm start")
-            except:
-                print("Can't load warm start")
-
-        if self.solver == 'proxnlp':
-            xinit = self.pb_space.neutral()
-            try:
-                dxs_g = guess['dxs']
-                us_g = guess['us']
-                acs_g = guess['acs']
-                fs_g = guess['fs']
-                
-                x_guess = []
-                for i,g in enumerate([dxs_g, acs_g, us_g, fs_g]):
-                    if i != 3:
-                        x_tmp = np.concatenate([g, np.zeros((1, g.shape[1]))])
-                    else: # if loading forces
-                        x_tmp = np.concatenate([g, np.zeros((1,6))])
-                    x_guess.append(casadi.vertcat(*x_tmp))
-                    x_tmp = []
-                xinit = casadi.vertcat(*x_guess).full()[:, 0]
-                print("Got warm start")
-            except:
-                print("Can't load warm start")
-            
-            self.xinit = xinit
-            
+            for x,xg in zip(self.dxs,xs_g): self.opti.set_initial(x, xdiff(self.x0,xg))
+            #for a,ag in zip(self.acs,acs_g): self.opti.set_initial(a, ag)
+            for u,ug in zip(self.us,us_g): self.opti.set_initial(u,ug)
+            """ for f, fg in zip(self.fs, fs_g):
+                fgsplit = np.split(fg, len(f))
+                fgc = []
+                [fgc.append(f) for f in fgsplit]
+                [self.opti.set_initial(f[i], fgc[i]) for i in range(len(f))] """
+            print("Got warm start")
+        except:
+            print("Can't load warm start")
+           
     def get_results(self):
         dxs_sol = np.array([self.opti.value(dx) for dx in self.dxs])
         xs_sol = np.array([self.opti.value(x) for x in self.xs])
@@ -374,7 +357,11 @@ class OCP():
         return feet_log
 
     def get_base_log(self, xs_sol):
+        """ Get the base positions computed durnig one ocp
         
+        :param xs_sol: Array of dimension [n_steps, n_states]
+        
+        """
         base_pos_log = []
         [base_pos_log.append(self.terminalModel.baseTranslation(xs_sol[i]).full()[:,0]) for i in range(len(xs_sol))]
         base_pos_log = np.array(base_pos_log)
@@ -431,9 +418,9 @@ class OCP():
             self.fs.append(f_tmp)
         self.fs = self.fs
 
-        cost, eq_constraints, ineq_constraints = self.make_ocp()
+        self.cost, eq_constraints, ineq_constraints = self.make_ocp()
 
-        opti.minimize(cost)
+        opti.minimize(self.cost)
 
         opti.subject_to(eq_constraints == 0)
         opti.subject_to(ineq_constraints <= 0)
@@ -441,8 +428,8 @@ class OCP():
         
 
         p_opts = {}
-        s_opts = {"tol": 1e-8,
-            "acceptable_tol":1e-8,
+        s_opts = {"tol": 1e-10,
+            "acceptable_tol":1e-10,
             #"max_iter": 21,
             #"compl_inf_tol": 1e-2,
             #"constr_viol_tol": 1e-2
@@ -459,13 +446,16 @@ class OCP():
         opti.solve_limited()
     
     def solve(self, guess=None):
+        """ Solve the NLP
+        :param guess: ditctionary in the form: {'xs':array([T+1, n_states]), 'acs':array([T, nv]),\
+            'us':array([T, nu]), 'fs': [array([T, nv]),]}
+        """
 
         self.runningModels = [ self.casadiActionModels[self.contactSequence[t]] for t in range(self.T) ]
         self.terminalModel = self.casadiActionModels[self.contactSequence[self.T]]
 
         start_time = time() 
-        if self.solver == 'ipopt':
-            print("Using IPOPT")
-            self.use_ipopt_solver(guess)
+
+        self.use_ipopt_solver(guess)
 
         self.iterationTime = time() - start_time

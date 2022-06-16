@@ -25,9 +25,6 @@ class Controller:
         self.solo = Solo12()
         self.results = Results()
 
-        self.x = None
-        self.u = None
-
         self.nq = self.solo.nq 
         nv = self.solo.nv
         self.q0 = self.solo.q0
@@ -83,25 +80,19 @@ class Controller:
         print('*** SOLVE ***')
         self._solver.setCallbacks([crocoddyl.CallbackVerbose()])
 
-        if not self.x:
-            self.x = [x0] * (self._solver.problem.T + 1)
-            self.u = self._solver.problem.quasiStatic([x0] * self._solver.problem.T)
+        if guess:
+            xs = guess['xs']
+            us = guess['us']
             
-        self._solver.solve(self.x, self.u, 100, False, 0.1)
-
-        x =  self._solver.xs.tolist()
-        self.x = x[1:] + [x[-1]]
-        u =  self._solver.us.tolist()
-        self.u = u[1:] + [u[-1]]
-        
-        self.warmstart['xs'] = self._solver.xs[1:]
-        self.warmstart['us'] = self._solver.us[1:]
+        else:
+            xs = [x0] * (self._solver.problem.T + 1)
+            us = self._solver.problem.quasiStatic([x0] * self._solver.problem.T)
+        self._solver.solve(xs, us, 100, False, 0.1)
 
         self.results.ocp_storage['xs'] += [np.array(self._solver.xs.tolist())]
         self.results.ocp_storage['fw'] += [self.get_croco_forces()]
         self.results.ocp_storage['us'] += [np.array(self._solver.us.tolist())]
-        self.results.ocp_storage['qj_des'] += [np.array(self._solver.xs.tolist())[:, 7: self.nq]]
-        self.results.ocp_storage['vj_des'] += [np.array(self._solver.xs.tolist())[:, self.nq + 6: ]]
+        self.results.ocp_storage['xs'] += [np.array(self._solver.xs.tolist())]
 
 
         """ self.ocp.solve(guess=self.warmstart)
