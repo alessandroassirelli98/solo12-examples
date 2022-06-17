@@ -112,12 +112,16 @@ class ShootingNode():
                                                 pin.LOCAL_WORLD_ALIGNED ).linear])
                     for idf in allContactIds}
 
-    def init(self, x, a=None, u=None, fs=None):
+    def init(self, x, a=None, u=None, fs=None, isTerminal=False):
+        if not isTerminal:
+            self.a = a
+            self.u = u
+            self.tau = casadi.vertcat( np.zeros(6), u )
+            self.fs = fs
+
+        self.isTerminal = isTerminal
         self.x = x
-        self.a = a
-        self.u = u
-        self.tau = casadi.vertcat( np.zeros(6), u )
-        self.fs = fs
+       
         
     def calc(self, x_ref, u_ref=None, target=None):
         '''
@@ -214,11 +218,11 @@ class ShootingNode():
       
     def compute_cost(self, x_ref, u_ref, target):
         self.cost = 0
-        #self.constraint_standing_feet_cost()
-        #self.force_reg_cost()
-        self.control_cost(u_ref)
+        if not self.isTerminal:
+            self.constraint_standing_feet_cost()
+            self.control_cost(u_ref)
+            self.target_cost(target)
         self.body_reg_cost(x_ref=x_ref)
-        self.target_cost(target)
 
         return self.cost
 
@@ -392,8 +396,8 @@ class OCP():
             totalcost += rcost
 
         #eq.append(self.xs[self.T][self.terminalModel.nq :])
-        #self.terminalModel.init(self.xs[self.T],  self.acs[t], self.us[t], self.fs[t]) # Only xs[T] matters!
-        #totalcost += self.terminalModel.calc(self.x_ref, self.u_ref, self.target[self.T])[1]
+        self.terminalModel.init(self.xs[self.T],  isTerminal=True) # Only xs[T] matters!
+        totalcost += self.terminalModel.calc(self.x_ref, self.u_ref, self.target[self.T])[1]
         #totalcost += 1/2*conf.terminal_velocity_w * casadi.sumsqr(self.xs[self.T][self.terminalModel.nq:]) * self.dt
 
         eq_constraints = casadi.vertcat(*eq)
@@ -424,8 +428,8 @@ class OCP():
         
 
         p_opts = {}
-        s_opts = {"tol": 1e-3,
-            "acceptable_tol":1e-3,
+        s_opts = {"tol": 1e-8,
+            "acceptable_tol":1e-8,
             #"max_iter": 21,
             #"compl_inf_tol": 1e-2,
             #"constr_viol_tol": 1e-2

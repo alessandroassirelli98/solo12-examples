@@ -78,9 +78,9 @@ class SimpleManipulationProblem:
             print("Contacts on ", contactSequence[t])
             print("Free on: ", freeIds)
 
-            model += self.createFootstepModels(comRef, target[t], timeStep, contactSequence[t], freeIds)
+            model += self.createFootstepModels(comRef, target[t], timeStep, contactSequence[t], freeIds, False)
         
-        model += self.createFootstepModels(comRef, target[t], timeStep, contactSequence[t], freeIds, True)
+        model += self.createFootstepModels(comRef, target[T], timeStep, contactSequence[T], freeIds, True)
 
         problem = crocoddyl.ShootingProblem(x0, model[:-1], model[-1])
         return problem
@@ -158,12 +158,10 @@ class SimpleManipulationProblem:
             ctrlReg = crocoddyl.CostModelResidual(self.state, ctrlResidual) 
             costModel.addCost("ctrlReg", ctrlReg, conf.control_reg_w)
 
-            stateResidual = crocoddyl.ResidualModelState(self.state, self.x_ref , nu)
-            stateActivation = crocoddyl.ActivationModelWeightedQuad(conf.state_reg_w**2)
-            stateReg = crocoddyl.CostModelResidual(self.state, stateActivation, stateResidual)
-            costModel.addCost("stateReg", stateReg, 1)
-
-    
+        stateResidual = crocoddyl.ResidualModelState(self.state, self.x_ref , nu)
+        stateActivation = crocoddyl.ActivationModelWeightedQuad(conf.state_reg_w**2)
+        stateReg = crocoddyl.CostModelResidual(self.state, stateActivation, stateResidual)
+        costModel.addCost("stateReg", stateReg, 1)
 
         """ lb = np.concatenate([self.state.lb[1:self.state.nv + 1], self.state.lb[-self.state.nv:]])
         ub = np.concatenate([self.state.ub[1:self.state.nv + 1], self.state.ub[-self.state.nv:]])

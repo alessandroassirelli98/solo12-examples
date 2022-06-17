@@ -87,7 +87,8 @@ class Controller:
         else:
             xs = [x0] * (self._solver.problem.T + 1)
             us = self._solver.problem.quasiStatic([x0] * self._solver.problem.T)
-        self._solver.solve(xs, us, 100, False, 0.1)
+
+        self._solver.solve(xs, us, 100, True, 1e-9)
 
         self.results.ocp_storage['xs'] += [np.array(self._solver.xs.tolist())]
         self.results.ocp_storage['fw'] += [self.get_croco_forces()]
