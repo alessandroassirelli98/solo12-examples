@@ -67,6 +67,7 @@ class Controller:
         for t in range(self.n_nodes): target += [FR_foot0 + offset +A*np.sin(2*np.pi*freq * (t+t_)* self.dt + phase)]
         self.target = np.array(target)
 
+
     def shift_gate(self):
         self.gait.pop(0)
         self.gait += [self.gait[-1]]

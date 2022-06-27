@@ -98,6 +98,8 @@ if __name__ == '__main__':
     np.save(open('/tmp/sol_ipopt.npy', "wb"),
         {
             "xs": ctrl.results.ocp_storage['xs'][1],
-            "us": ctrl.results.ocp_storage['us'][0]} )
+            'acs': ctrl.results.ocp_storage['acs'][0],
+            "us": ctrl.results.ocp_storage['us'][0],
+            'fs': ctrl.results.ocp_storage['fs'][0] } )
 
     #plot_ocp(ctrl, ctrl.results, local_res, 0.001)

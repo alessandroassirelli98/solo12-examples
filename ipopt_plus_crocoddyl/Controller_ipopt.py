@@ -10,7 +10,7 @@ class Results:
         self.tau_ff =  []
         self.tau = []
         self.x_m = []
-        self.ocp_storage = {'xs': [], 'us': [], 'fw': [], 'qj_des': [], 'vj_des': [], 'residuals' : {'inf_pr': [], 'inf_du': []}}
+        self.ocp_storage = {'xs': [], 'acs': [], 'us': [], 'fw': [], 'fs': [], 'qj_des': [], 'vj_des': [], 'residuals' : {'inf_pr': [], 'inf_du': []}}
 
 
 class Controller:
@@ -85,7 +85,9 @@ class Controller:
         self.warmstart['fs'] = f[1:]
 
         self.results.ocp_storage['fw'] += [fw]
+        self.results.ocp_storage['fs'] += [f]
         self.results.ocp_storage['xs'] += [x]
+        self.results.ocp_storage['acs'] += [a]
         self.results.ocp_storage['us'] += [u]
         self.results.ocp_storage['qj_des'] += [x[:, 7: self.nq]]
         self.results.ocp_storage['vj_des'] += [x[:, self.nq + 6: ]]

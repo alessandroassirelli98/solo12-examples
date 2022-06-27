@@ -180,11 +180,11 @@ class ShootingNode():
             R = self.Rfeet[stFoot](self.x)
             f_ = self.fs[i]
             fw = R @ f_
-            self.cost += conf.friction_cone_w * casadi.if_else(fw[2]>=1,0,(fw[2]-1)**2)/2 * self.dt
-            self.cost += conf.friction_cone_w*casadi.if_else(fw[0] > conf.mu*fw[2], (conf.mu*fw[2]-fw[0])**2, 0)/2* self.dt
-            self.cost += conf.friction_cone_w*casadi.if_else(fw[0] < -conf.mu*fw[2], (conf.mu*fw[2]+fw[0])**2, 0)/2* self.dt
-            self.cost += conf.friction_cone_w*casadi.if_else(fw[1] > conf.mu*fw[2], (conf.mu*fw[2]-fw[1])**2, 0)/2* self.dt
-            self.cost += conf.friction_cone_w*casadi.if_else(fw[1] < -conf.mu*fw[2], (conf.mu*fw[2]+fw[1])**2, 0)/2* self.dt
+            self.cost += conf.friction_cone_w * casadi.if_else(fw[2]>=0,0,(fw[2])**2)/2 * self.dt
+            self.cost += conf.friction_cone_w*casadi.if_else(fw[0] > conf.mu*fw[2], (-conf.mu*fw[2]+fw[0])**2, 0)/2* self.dt
+            self.cost += conf.friction_cone_w*casadi.if_else(-fw[0] > conf.mu*fw[2], (-conf.mu*fw[2]-fw[0])**2, 0)/2* self.dt
+            self.cost += conf.friction_cone_w*casadi.if_else(fw[1] > conf.mu*fw[2], (-conf.mu*fw[2]+fw[1])**2, 0)/2* self.dt
+            self.cost += conf.friction_cone_w*casadi.if_else(-fw[1] > conf.mu*fw[2], (-conf.mu*fw[2]-fw[1])**2, 0)/2* self.dt
 
     def constraint_dynamics_eq(self):
         eq = []
@@ -222,6 +222,7 @@ class ShootingNode():
             self.constraint_standing_feet_cost()
             self.control_cost(u_ref)
             self.target_cost(target)
+            
         self.body_reg_cost(x_ref=x_ref)
 
         return self.cost
