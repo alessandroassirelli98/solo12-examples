@@ -174,17 +174,17 @@ class ShootingNode():
             
     def constraint_standing_feet_cost(self):
         # Friction cone
-        cf = 0
-        ineq = []
         for i, stFoot in enumerate(self.contactIds):
             R = self.Rfeet[stFoot](self.x)
             f_ = self.fs[i]
-            fw = R @ f_
-            self.cost += conf.friction_cone_w * casadi.if_else(fw[2]>=0,0,(fw[2])**2)/2 * self.dt
-            self.cost += conf.friction_cone_w*casadi.if_else(fw[0] > conf.mu*fw[2], (-conf.mu*fw[2]+fw[0])**2, 0)/2* self.dt
-            self.cost += conf.friction_cone_w*casadi.if_else(-fw[0] > conf.mu*fw[2], (-conf.mu*fw[2]-fw[0])**2, 0)/2* self.dt
-            self.cost += conf.friction_cone_w*casadi.if_else(fw[1] > conf.mu*fw[2], (-conf.mu*fw[2]+fw[1])**2, 0)/2* self.dt
-            self.cost += conf.friction_cone_w*casadi.if_else(-fw[1] > conf.mu*fw[2], (-conf.mu*fw[2]-fw[1])**2, 0)/2* self.dt
+            fw = f_ ################# PREMULTIPLY BY R !!!!!
+            
+            A = np.matrix([ [1, 0, -conf.mu], [-1, 0, -conf.mu], [6.1234234*1e-17, 1, -conf.mu], [-6.1234234*1e-17, -1, -conf.mu], [0,0,1] ])
+            lb = np.array([-casadi.inf, -casadi.inf, -casadi.inf, -casadi.inf, 0])
+            ub = np.array([0,0,0,0, casadi.inf])
+            r = A @ fw
+            self.cost += conf.friction_cone_w * casadi.sumsqr(casadi.if_else(r<=lb, r, 0 ))/2 * self.dt
+            self.cost += conf.friction_cone_w * casadi.sumsqr(casadi.if_else(r>=ub, r, 0 ))/2 * self.dt
 
     def constraint_dynamics_eq(self):
         eq = []
@@ -209,7 +209,11 @@ class ShootingNode():
         self.cost += 1/2*conf.control_reg_w * casadi.sumsqr(self.u - u_ref) *self.dt
 
     def body_reg_cost(self, x_ref):
-        self.cost += 1/2 * casadi.sumsqr(conf.state_reg_w * self.difference(self.x, x_ref))* self.dt
+        if self.isTerminal:
+            self.cost += 1/2 * casadi.sumsqr(conf.state_reg_w * self.difference(self.x, x_ref))
+            self.cost += 1/2 * casadi.sumsqr(conf.terminal_velocity_w * self.difference(self.x, x_ref))
+        else:
+            self.cost += 1/2 * casadi.sumsqr(conf.state_reg_w * self.difference(self.x, x_ref))* self.dt
 
     def target_cost(self, target):
         # I am Assuming just FR FOOt to be free

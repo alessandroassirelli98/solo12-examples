@@ -7,31 +7,33 @@ import numpy as np
 import pinocchio as pin
 from pinocchio import casadi as cpin
 
-from . import parameters_conf as conf
 
 plt.style.use('seaborn')
 path = os.getcwd()
 class ShootingNode():
-    def __init__(self, cmodel, model, q0, allContactIds, contactIds, dt):
+    def __init__(self, problemData, allContactIds, contactIds):
         
-        self.dt = dt
+        self.pd = problemData
+
+        self.dt = problemData.dt
         self.contactIds = contactIds
         self.freeIds = []
 
-        self.baseId = baseId = model.getFrameId('base_link')
-        
-        self.cmodel = cmodel
-        self.cdata = cdata = cmodel.createData()
-        data = model.createData()
+        model = problemData.model
+        self.cmodel = cmodel = problemData.cmodel
+        self.cdata = cdata = self.cmodel.createData()
+        data = problemData.model.createData()
 
-        self.nq = nq = cmodel.nq
-        self.nv = nv = cmodel.nv
+        self.baseId = baseId = model.getFrameId('base_link')
+
+        self.nq = nq = problemData.nq
+        self.nv = nv = problemData.nv
         self.nx = nq+nv
         self.ndx = 2*nv
         self.nu = nv-6
         self.ntau = nv
 
-        pin.framesForwardKinematics(model,data, q0)
+        pin.framesForwardKinematics(model,data, problemData.q0)
         self.robotweight = -sum([Y.mass for Y in model.inertias]) * model.gravity.linear[2]
         [self.freeIds.append(idf) for idf in allContactIds if idf not in contactIds ]
 
@@ -109,12 +111,21 @@ class ShootingNode():
                                                 pin.LOCAL_WORLD_ALIGNED ).linear])
                     for idf in allContactIds}
 
-    def init(self, x, a=None, u=None, fs=None):
+    def init(self, data, x, a=None, u=None, fs=None, isTerminal = False):
         self.x = x
-        self.a = a
-        self.u = u
-        self.tau = casadi.vertcat( np.zeros(6), u )
-        self.fs = fs
+        self.isTerminal = isTerminal
+        self.data = data
+        self.data.x = x
+        self.data.a = a
+        self.data.u = u
+        self.data.f = fs
+
+        if not isTerminal:
+            self.a = a
+            self.u = u
+            self.tau = casadi.vertcat( np.zeros(6), u )
+            self.fs = fs
+        
         
     def calc(self, x_ref, u_ref=None, target=None):
         '''
@@ -143,10 +154,12 @@ class ShootingNode():
             vnext = vm + amid*dt
             
         xnext = casadi.vertcat(qnext,vnext)
+        self.data.xnext = xnext
             
 
         # Cost functions:
         self.compute_cost(x_ref, u_ref, target)
+        self.data.cost = self.cost
 
         return xnext, self.cost
 
@@ -173,11 +186,11 @@ class ShootingNode():
             R = self.Rfeet[stFoot](self.x)
             f_ = self.fs[i]
             fw = R @ f_
-            self.cost += conf.friction_cone_w * casadi.if_else(fw[2]>=1,0,(fw[2]-1)**2)/2 * self.dt
-            self.cost += conf.friction_cone_w*casadi.if_else(fw[0] > conf.mu*fw[2], (conf.mu*fw[2]-fw[0])**2, 0)/2* self.dt
-            self.cost += conf.friction_cone_w*casadi.if_else(fw[0] < -conf.mu*fw[2], (conf.mu*fw[2]+fw[0])**2, 0)/2* self.dt
-            self.cost += conf.friction_cone_w*casadi.if_else(fw[1] > conf.mu*fw[2], (conf.mu*fw[2]-fw[1])**2, 0)/2* self.dt
-            self.cost += conf.friction_cone_w*casadi.if_else(fw[1] < -conf.mu*fw[2], (conf.mu*fw[2]+fw[1])**2, 0)/2* self.dt
+            self.cost += self.pd.friction_cone_w * casadi.if_else(fw[2]>=0,0,(fw[2])**2)/2 * self.dt
+            self.cost += self.pd.friction_cone_w*casadi.if_else(fw[0] > self.pd.mu*fw[2], (-self.pd.mu*fw[2]+fw[0])**2, 0)/2* self.dt
+            self.cost += self.pd.friction_cone_w*casadi.if_else(-fw[0] > self.pd.mu*fw[2], (-self.pd.mu*fw[2]-fw[0])**2, 0)/2* self.dt
+            self.cost += self.pd.friction_cone_w*casadi.if_else(fw[1] > self.pd.mu*fw[2], (-self.pd.mu*fw[2]+fw[1])**2, 0)/2* self.dt
+            self.cost += self.pd.friction_cone_w*casadi.if_else(-fw[1] > self.pd.mu*fw[2], (-self.pd.mu*fw[2]-fw[1])**2, 0)/2* self.dt
 
     def constraint_dynamics_eq(self):
         eq = []
@@ -195,26 +208,27 @@ class ShootingNode():
             R = self.Rfeet[stFoot](self.x)
             f_ = self.fs[i]
             fw = R @ f_
-            self.cost += conf.force_reg_w * casadi.norm_2(fw[2] - \
+            self.cost += self.pd.force_reg_w * casadi.norm_2(fw[2] - \
                                                 self.robotweight/len(self.contactIds)) * self.dt
     
     def control_cost(self, u_ref):
-        self.cost += 1/2*conf.control_reg_w * casadi.sumsqr(self.u - u_ref) *self.dt
+        self.cost += 1/2*self.pd.control_reg_w * casadi.sumsqr(self.u - u_ref) *self.dt
 
     def body_reg_cost(self, x_ref):
-        self.cost += 1/2 * casadi.sumsqr(conf.state_reg_w * self.difference(self.x, x_ref))* self.dt
+        self.cost += 1/2 * casadi.sumsqr(self.pd.state_reg_w * self.difference(self.x, x_ref))* self.dt
 
     def target_cost(self, target):
         # I am Assuming just FR FOOt to be free
         for sw_foot in self.freeIds:
-            self.cost += 1/2 * conf.foot_tracking_w* casadi.sumsqr(self.feet[sw_foot](self.x) - target) * self.dt
+            self.cost += 1/2 * self.pd.foot_tracking_w* casadi.sumsqr(self.feet[sw_foot](self.x) - target) * self.dt
       
     def compute_cost(self, x_ref, u_ref, target):
         self.cost = 0
-        #self.constraint_standing_feet_cost()
-        #self.force_reg_cost()
-        self.control_cost(u_ref)
+        if not self.isTerminal:
+            self.constraint_standing_feet_cost()
+            self.control_cost(u_ref)
+            self.target_cost(target)
+            
         self.body_reg_cost(x_ref=x_ref)
-        self.target_cost(target)
 
         return self.cost

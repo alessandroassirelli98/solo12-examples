@@ -89,7 +89,7 @@ class Controller:
             xs = [x0] * (self._solver.problem.T + 1)
             us = self._solver.problem.quasiStatic([x0] * self._solver.problem.T)
 
-        self._solver.solve(xs, us, 100, True, 1e-9)
+        self._solver.solve(xs, us, 100, False, 1e-9)
 
         self.results.ocp_storage['xs'] += [np.array(self._solver.xs.tolist())]
         self.results.ocp_storage['fw'] += [self.get_croco_forces()]
@@ -139,7 +139,7 @@ class Controller:
             mdict = m.differential.multibody.contacts.contacts.todict()
             f_tmp = []
             for n in mdict:
-                f_tmp += [(mdict[n].jMf.inverse()*mdict[n].f).linear]
+                f_tmp += [(mdict[n].jMf.inverse() * mdict[n].f).linear]
             forces += [np.concatenate(f_tmp)]
         return forces
 
