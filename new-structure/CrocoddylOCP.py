@@ -1,16 +1,13 @@
-from problem import ProblemData
+from ProblemData import ProblemData
 import crocoddyl
 import pinocchio as pin
 import numpy as np
 
-class SimpleManipulationProblem:
-    def __init__(self, problemData):
-        
-        self.pd = problemData
 
-        self.rmodel = self.pd.robot.model
-        self.rdata = self.rmodel.createData()
-        
+class CrocoddylOCP:
+    def __init__(self, pd):
+        self.pd = pd
+
         self.state = crocoddyl.StateMultibody(self.rmodel)
         self.actuation = crocoddyl.ActuationModelFloatingBase(self.state)
 
@@ -19,28 +16,32 @@ class SimpleManipulationProblem:
 
         :param x0: initial state
         """
-        self.control = crocoddyl.ControlParametrizationModelPolyZero(self.actuation.nu)
+        self.control = crocoddyl.ControlParametrizationModelPolyZero(
+            self.actuation.nu)
 
         # Compute the current foot positions
         q0 = x0[:self.state.nq]
         pin.forwardKinematics(self.rmodel, self.rdata, q0)
         pin.updateFramePlacements(self.rmodel, self.rdata)
-        
+
         model = []
         for t in range(self.pd.T):
             target = self.pd.target
-            freeIds = [idf for idf in self.pd.allContactIds if idf not in self.pd.contactSequence[t]]
+            freeIds = [
+                idf for idf in self.pd.allContactIds if idf not in self.pd.contactSequence[t]]
             contactIds = self.pd.contactSequence[t]
-            model += self.createFootstepModels(target[t], contactIds, freeIds) 
+            model += self.createFootstepModels(target[t], contactIds, freeIds)
 
-        freeIds = [idf for idf in self.pd.allContactIds if idf not in self.pd.contactSequence[self.pd.T]]
+        freeIds = [
+            idf for idf in self.pd.allContactIds if idf not in self.pd.contactSequence[self.pd.T]]
         contactIds = self.pd.contactSequence[self.pd.T]
-        model += self.createFootstepModels(target[self.pd.T], contactIds, freeIds, True)
+        model += self.createFootstepModels(
+            target[self.pd.T], contactIds, freeIds, True)
 
         problem = crocoddyl.ShootingProblem(x0, model[:-1], model[-1])
 
         return problem
-    
+
     def createFootstepModels(self,  target, supportFootIds,
                              swingFootIds, isTerminal=False):
         """ Action models for a footstep phase.
@@ -57,7 +58,8 @@ class SimpleManipulationProblem:
             swingFootTask += [[i, pin.SE3(np.eye(3), tref)]]
 
         footSwingModel += [
-            self.createSwingFootModel(supportFootIds, swingFootTask=swingFootTask, isTerminal=isTerminal)
+            self.createSwingFootModel(
+                supportFootIds, swingFootTask=swingFootTask, isTerminal=isTerminal)
         ]
         return footSwingModel
 
@@ -76,8 +78,9 @@ class SimpleManipulationProblem:
         contactModel = crocoddyl.ContactModelMultiple(self.state, nu)
         for i in supportFootIds:
             supportContactModel = crocoddyl.ContactModel3D(self.state, i, np.array([0., 0., 0.]), nu,
-                                                           np.array([0., 50.]))
-            contactModel.addContact(self.rmodel.frames[i].name + "_contact", supportContactModel)
+                                                           np.array([0., 0.]))
+            contactModel.addContact(
+                self.rmodel.frames[i].name + "_contact", supportContactModel)
 
         # Creating the cost model for a contact phase
         costModel = crocoddyl.CostModelSum(self.state, nu)
@@ -85,35 +88,56 @@ class SimpleManipulationProblem:
         if not isTerminal:
 
             for i in supportFootIds:
-                cone = crocoddyl.FrictionCone(self.pd.Rsurf, self.pd.mu, 4, False)
-                coneResidual = crocoddyl.ResidualModelContactFrictionCone(self.state, i, cone, nu)
+                cone = crocoddyl.FrictionCone(
+                    self.pd.Rsurf, self.pd.mu, 4, False)
+                coneResidual = crocoddyl.ResidualModelContactFrictionCone(
+                    self.state, i, cone, nu)
                 #forceResidual = crocoddyl.ResidualModelContactForce(self.state, i, np.array([0,0,4]), 3, nu)
-                coneActivation = crocoddyl.ActivationModelQuadraticBarrier(crocoddyl.ActivationBounds(cone.lb, cone.ub))
+                coneActivation = crocoddyl.ActivationModelQuadraticBarrier(
+                    crocoddyl.ActivationBounds(cone.lb, cone.ub))
                 #forceActivation = crocoddyl.ActivationModelQuadraticBarrier(crocoddyl.ActivationBounds(-1000, 0))
-                frictionCone = crocoddyl.CostModelResidual(self.state, coneActivation, coneResidual)
+                frictionCone = crocoddyl.CostModelResidual(
+                    self.state, coneActivation, coneResidual)
                 #force = crocoddyl.CostModelResidual(self.state, forceActivation, forceResidual)
-                costModel.addCost(self.rmodel.frames[i].name + "_frictionCone", frictionCone, self.pd.friction_cone_w)
+                costModel.addCost(
+                    self.rmodel.frames[i].name + "_frictionCone", frictionCone, self.pd.friction_cone_w)
                 #costModel.addCost(self.rmodel.frames[i].name + "_unilateral", force, 1e5)
             if swingFootTask is not None:
                 for i in swingFootTask:
                     frameTranslationResidual = crocoddyl.ResidualModelFrameTranslation(self.state, i[0], i[1].translation,
-                                                                                    nu)
-                    footTrack = crocoddyl.CostModelResidual(self.state, frameTranslationResidual)
-                    costModel.addCost(self.rmodel.frames[i[0]].name + "_footTrack", footTrack, self.pd.foot_tracking_w)
+                                                                                       nu)
+                    footTrack = crocoddyl.CostModelResidual(
+                        self.state, frameTranslationResidual)
+                    costModel.addCost(
+                        self.rmodel.frames[i[0]].name + "_footTrack", footTrack, self.pd.foot_tracking_w)
 
-            ctrlResidual = crocoddyl.ResidualModelControl(self.state, self.pd.uref)    
-            ctrlReg = crocoddyl.CostModelResidual(self.state, ctrlResidual) 
+            ctrlResidual = crocoddyl.ResidualModelControl(
+                self.state, self.pd.uref)
+            ctrlReg = crocoddyl.CostModelResidual(self.state, ctrlResidual)
             costModel.addCost("ctrlReg", ctrlReg, self.pd.control_reg_w)
 
-            stateResidual = crocoddyl.ResidualModelState(self.state, self.pd.xref , nu)
-            stateActivation = crocoddyl.ActivationModelWeightedQuad(self.pd.state_reg_w**2)
-            stateReg = crocoddyl.CostModelResidual(self.state, stateActivation, stateResidual)
-            costModel.addCost("stateReg", stateReg, 1)
+        stateResidual = crocoddyl.ResidualModelState(
+            self.state, self.pd.xref, nu)
+        stateActivation = crocoddyl.ActivationModelWeightedQuad(
+            self.pd.state_reg_w**2)
+        stateReg = crocoddyl.CostModelResidual(
+            self.state, stateActivation, stateResidual)
+        costModel.addCost("stateReg", stateReg, 1)
+
+        if isTerminal:
+            stateResidual = crocoddyl.ResidualModelState(
+                self.state, self.pd.xref, nu)
+            stateActivation = crocoddyl.ActivationModelWeightedQuad(
+                self.pd.terminal_velocity_w**2)
+            stateReg = crocoddyl.CostModelResidual(
+                self.state, stateActivation, stateResidual)
+            costModel.addCost("terminalVelocity", stateReg, 1)
 
         dmodel = crocoddyl.DifferentialActionModelContactFwdDynamics(self.state, self.actuation, contactModel,
                                                                      costModel, 0., True)
 
-        model = crocoddyl.IntegratedActionModelEuler(dmodel, self.control, self.pd.dt)
+        model = crocoddyl.IntegratedActionModelEuler(
+            dmodel, self.control, self.pd.dt)
 
         return model
 
@@ -125,20 +149,22 @@ class SimpleManipulationProblem:
 
         for g in guess:
             if guess[g] == []:
-                print("No warmstart provided")    
+                print("No warmstart provided")
                 xs = [x0] * (self._solver.problem.T + 1)
-                us = self._solver.problem.quasiStatic([x0] * self._solver.problem.T)
+                us = self._solver.problem.quasiStatic(
+                    [x0] * self._solver.problem.T)
                 break
             else:
                 xs = guess['xs']
                 us = guess['us']
+                print("Using warmstart")
 
-        self._solver.solve(xs, us, 100, False, 0.1)
+        self._solver.solve(xs, us, 100, False, 1e-9)
 
     def get_croco_forces(self):
         d = self._solver.problem.runningDatas[0]
         cnames = d.differential.multibody.contacts.contacts.todict().keys()
-        forces = {n : [] for n in cnames}
+        forces = {n: [] for n in cnames}
 
         for m in self._solver.problem.runningDatas:
             mdict = m.differential.multibody.contacts.contacts.todict()
@@ -146,8 +172,9 @@ class SimpleManipulationProblem:
                 if n in mdict:
                     forces[n] += [(mdict[n].jMf.inverse()*mdict[n].f).linear]
                 else:
-                    forces[n] += [np.array([0,0,0])]
-        for f in forces: forces[f] = np.array(forces[f])
+                    forces[n] += [np.array([0, 0, 0])]
+        for f in forces:
+            forces[f] = np.array(forces[f])
         return forces
 
     def get_croco_forces_ws(self):
@@ -163,14 +190,13 @@ class SimpleManipulationProblem:
 
     def get_croco_acc(self):
         acc = []
-        [acc.append(m.differential.xout) for m in self._solver.problem.runningDatas ]
+        [acc.append(m.differential.xout)
+         for m in self._solver.problem.runningDatas]
         return acc
-    
+
     def get_results(self):
         x = self._solver.xs.tolist()
         a = self.get_croco_acc()
         u = self._solver.us.tolist()
         f_ws = self.get_croco_forces_ws()
         return None, x, a, u, f_ws, None
-        
-        

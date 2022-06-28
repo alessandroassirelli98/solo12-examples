@@ -1,23 +1,24 @@
 from shutil import which
 from utils.PyBulletSimulator import PyBulletSimulator
-#from ipopt_ocp_setup import SimpleManipulationProblem as ipopt_ocp
-from crocoddyl_ocp_setup import SimpleManipulationProblem as croco_ocp
-from data import OcpData
 import numpy as np
 
+class OCPData:
+    def __init__(self):
+        self.ocp_storage = {'xs': [], 'acs': [], 'us': [], 'fs': [], 'qj_des': [], 'vj_des': [], 'residuals' : {'inf_pr': [], 'inf_du': []}}
+
 class Controller:
-    def __init__(self, problemData, dt_sim, r, whichSolver = 'ipopt'):
+    def __init__(self, problemData, dt_sim, r, solver = 'ipopt'):
         self.pd = problemData
-        self.results = OcpData()
-        if whichSolver == 'ipopt':
-            self.problem = ipopt_ocp(self.pd)
-            self.warmstart = self.warmstart = {'xs': [], 'acs': [], 'us':[], 'fs': []}
+        self.results = OCPData()
+        if solver == 'ipopt':
+            from CasadiOCP import CasadiOCP as OCP
+        elif solver == 'crocoddyl':
+            from CrocoddylOCP import CrocoddylOCP as OCP
 
-        elif whichSolver == 'crocoddyl':
-            self.problem = croco_ocp(self.pd)
-            self.warmstart = self.warmstart = {'xs': [], 'acs': [], 'us':[], 'fs': []}
+        self.ocp = OCP(self.pd)
+        self.warmstart = {'xs': [], 'acs': [], 'us':[], 'fs': []}
 
-        self.solver = whichSolver
+        self.solver = solver
         self.dt_sim = dt_sim
         self.r = r
         self.device = self.Init_simulation(self.pd.q0[7:])
@@ -65,25 +66,21 @@ class Controller:
 
     def compute_step(self, x0, guess={}):
         if guess:
+            self.warmstart['xs'] = guess['xs']
+            self.warmstart['us'] = guess['us']
             if self.solver == 'ipopt':
-                self.warmstart['xs'] = guess['xs']
                 self.warmstart['acs'] = guess['acs']
-                self.warmstart['us'] = guess['us']
                 self.warmstart['fs'] = guess['fs']
 
-            if self.solver == 'crocoddyl':
-                self.warmstart['xs'] = guess['xs']
-                self.warmstart['us'] = guess['us']
-
-        self.problem.solve(x0, guess=self.warmstart)
-        _, x, a, u, f, fw = self.problem.get_results()
+        self.ocp.solve(x0, guess=self.warmstart)
+        _, x, a, u, f, fw = self.ocp.get_results()
 
         self.warmstart['xs'] = x[1:]  + [x[-1]]
         self.warmstart['acs'] = a[1:] + [a[-1]]
         self.warmstart['us'] = u[1:]  + [u[-1]]
-        self.warmstart['fs'] = f[1:]  + [f[-1]]
+        self.warmstart['f_ws'] = f[1:]  + [f[-1]]
 
         self.results.ocp_storage['fs']  += [f]
-        self.results.ocp_storage['xs']  += [x]
-        self.results.ocp_storage['acs'] += [a]
-        self.results.ocp_storage['us']  += [u]
+        self.results.ocp_storage['xs']  += [np.array(x)]
+        self.results.ocp_storage['acs'] += [np.array(a)]
+        self.results.ocp_storage['us']  += [np.array(u)]
