@@ -5,7 +5,7 @@ from ProblemData import ProblemData, Target
 from utils.PyBulletSimulator import PyBulletSimulator
 from pinocchio.visualize import GepettoVisualizer
 import numpy as np
-
+from plot_utils import plot_mpc
 
 def control_loop(init_guess, target):
     for t in range(horizon):
@@ -24,16 +24,17 @@ if __name__ == "__main__":
     pd = ProblemData()
     target = Target(pd)
 
-    horizon = 30
+    horizon = 20
 
     #device = Init_simulation(pd.x0[: pd.nq])
-    ctrl = Controller(pd, target, 'ipopt')
+    ctrl = Controller(pd, target, 'crocoddyl')
 
     guesses = np.load('/tmp/sol_crocoddyl.npy', allow_pickle=True).item()
     init_guess = {'xs': list(guesses['xs']), 'us': list(guesses['us']),
                   'acs': guesses['acs'], 'fs': guesses['fs']}
     control_loop(init_guess, target)
     ctrl.results.make_arrays()
+    plot_mpc(ctrl)
 
     try:
         viz = GepettoVisualizer(
@@ -49,3 +50,5 @@ if __name__ == "__main__":
     viz.play(ctrl.get_q_mpc().T, pd.dt)
     sleep(1)
     viz.play(ctrl.get_q_sim_mpc().T, pd.dt_sim)
+
+

@@ -83,11 +83,19 @@ class Controller:
 
     def send_torques(self, x, u, k=None):
         if self.solver == 'crocoddyl':
+            q, v = self.x2qv(x)
+            q_des, v_des = self.interpolate_traj(q, v, self.pd.r1)
             for t in range(self.pd.r1):
+                self.device.joints.set_desired_positions(q_des[t])
+                self.device.joints.set_desired_velocities(v_des[t])
+                self.device.joints.set_position_gains(3)
+                self.device.joints.set_velocity_gains(0.1)
                 m = self.read_state()
                 feedback = np.dot(k, self.ocp.state.diff(m['x_m'], x))
-                self.device.joints.set_torques(u + feedback)
+                self.device.joints.set_torques(u)
                 self.device.send_command_and_wait_end_of_cycle()
+
+                self.store_measures()
 
         if self.solver == 'ipopt':
             q, v = self.x2qv(x)
@@ -99,8 +107,9 @@ class Controller:
                 self.device.joints.set_velocity_gains(0.1)
                 self.device.joints.set_torques(u)
                 self.device.send_command_and_wait_end_of_cycle()
-                self.store_measures()
                 
+                self.store_measures()
+
     def tuple_to_array(self, tup):
         a = np.array([element for tupl in tup for element in tupl])
         return a

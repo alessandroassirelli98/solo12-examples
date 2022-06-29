@@ -1,6 +1,8 @@
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
+from kinematics_utils import get_translation, get_translation_array
+from Controller import Controller
 
 plt.style.use("seaborn")
 
@@ -90,20 +92,32 @@ def plot_ocp(ctrl, ocp_results, local_results, dt_simu):
     plt.show()
 
 
-def plot_mpc(ctrl, ocp_results, local_results, dt_simu):
+def plot_mpc(ctrl:Controller):
 
-    horizon = len(ocp_results.ocp_storage['xs'])-1
-    r = int(ctrl.dt/dt_simu)
-    t15 = np.linspace(0, horizon*ctrl.dt, horizon+1)
-    t1 = np.linspace(0, (horizon)*ctrl.dt, (horizon)*r+1)
-    t_mpc = np.linspace(0, (horizon)*ctrl.dt, horizon+1)
+    horizon = len(ctrl.results.ocp_storage['xs'])
+    t15 = np.linspace(0, horizon*ctrl.pd.dt, horizon+1)
+    t1 = np.linspace(0, (horizon)*ctrl.pd.dt, (horizon)*ctrl.pd.r1+1)
+    t_mpc = np.linspace(0, (horizon)*ctrl.pd.dt, horizon+1)
 
-    x_mpc = []
-    [x_mpc.append(ctrl.results.ocp_storage['xs'][i][1, :]) for i in range(horizon+1)]
+    x_mpc = [ctrl.pd.x0]
+    [x_mpc.append(ctrl.results.ocp_storage['xs'][i][1, :]) for i in range(horizon)]
     x_mpc = np.array(x_mpc)
 
-    feet_log_mpc = ctrl.ocp.get_feet_position(x_mpc)
-    feet_log_m = ctrl.ocp.get_feet_position(local_results.x_m)
+    feet_p_log_mpc = {id: get_translation_array(ctrl.pd, x_mpc, id)[0] for id in ctrl.pd.allContactIds}
+
+    legend = ['x', 'y', 'z']
+    plt.figure(figsize=(12, 6), dpi = 90)
+    for i in range(3):
+        for foot in feet_p_log_mpc:
+            plt.subplot(3,1,i+1)
+            plt.title('Foot position on ' + legend[i])
+            plt.plot(t15, feet_p_log_mpc[foot][:, i])
+            """ plt.plot(t1, feet_p_log_mpc[foot][:, i])
+            plt.legend(['OCP', 'BULLET']) """
+    plt.draw()
+    plt.show()
+
+    """feet_log_m = ctrl.ocp.get_feet_position(local_results.x_m)
     all_ocp_feet_log = [ctrl.ocp.get_feet_position(x)[18] for x in ctrl.results.ocp_storage['xs']]
     all_ocp_feet_log = np.array(all_ocp_feet_log)
 
@@ -153,4 +167,4 @@ def plot_mpc(ctrl, ocp_results, local_results, dt_simu):
     plt.draw()
 
 
-    plt.show()
+    plt.show() """
