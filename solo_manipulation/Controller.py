@@ -38,26 +38,33 @@ class Controller:
 
         self.device = self.Init_simulation(pd.q0[7:])
 
+    def compute_step(self, x0, guess=None):
+            if guess:
+                self.ocp.solve(x0, guess=guess)
+            else:
+                self.ocp.solve(x0, guess=self.last_result)
+
+            _, x, a, u, f, _ = self.ocp.get_results()
+
+            self.last_result['xs'] = x[1:]  + [x[-1]]
+            self.last_result['acs'] = a[1:] + [a[-1]]
+            self.last_result['us'] = u[1:]  + [u[-1]]
+            self.last_result['fs'] = f[1:]  + [f[-1]]
+
+            self.results.x = np.array(x[1])
+            self.results.u = np.array(u[0])
+            if self.solver == 'crocoddyl':
+                self.results.k = self.ocp.ddp.K[0]
+
+            self.results.ocp_storage['fs']  += [f]
+            self.results.ocp_storage['xs']  += [np.array(x)]
+            self.results.ocp_storage['acs'] += [np.array(a)]
+            self.results.ocp_storage['us']  += [np.array(u)]
+
     def Init_simulation(self, q_init):
         device = PyBulletSimulator()
         device.Init(q_init, 0, True, True, self.pd.dt_sim)
         return device
-
-    def tuple_to_array(self, tup):
-        a = np.array([element for tupl in tup for element in tupl])
-        return a
-    
-    def x2qv(self, x):
-        q = x[7: self.pd.nq]
-        v = x[self.pd.nq + 6 :]
-        return q, v
-
-    def interpolate_traj(self, q_des, v_des, ratio):
-        measures = self.read_state()
-        qj_des_i = np.linspace(measures['qj_m'], q_des, ratio)
-        vj_des_i = np.linspace(measures['vj_m'], v_des, ratio)
-
-        return qj_des_i, vj_des_i
 
     def read_state(self):
         self.device.parse_sensor_data()
@@ -94,7 +101,22 @@ class Controller:
                 self.device.send_command_and_wait_end_of_cycle()
                 self.store_measures()
                 
+    def tuple_to_array(self, tup):
+        a = np.array([element for tupl in tup for element in tupl])
+        return a
     
+    def x2qv(self, x):
+        q = x[7: self.pd.nq]
+        v = x[self.pd.nq + 6 :]
+        return q, v
+
+    def interpolate_traj(self, q_des, v_des, ratio):
+        measures = self.read_state()
+        qj_des_i = np.linspace(measures['qj_m'], q_des, ratio)
+        vj_des_i = np.linspace(measures['vj_m'], v_des, ratio)
+
+        return qj_des_i, vj_des_i
+                
     def get_q_mpc(self):
         q_mpc = []
         [q_mpc.append(x[1][: self.pd.nq]) for x in self.results.ocp_storage['xs']]
@@ -102,26 +124,3 @@ class Controller:
 
     def get_q_sim_mpc(self):
         return self.results.x_m[:, : self.pd.nq]
-
-    def compute_step(self, x0, guess=None):
-        if guess:
-            self.ocp.solve(x0, guess=guess)
-        else:
-            self.ocp.solve(x0, guess=self.last_result)
-
-        _, x, a, u, f, _ = self.ocp.get_results()
-
-        self.last_result['xs'] = x[1:]  + [x[-1]]
-        self.last_result['acs'] = a[1:] + [a[-1]]
-        self.last_result['us'] = u[1:]  + [u[-1]]
-        self.last_result['fs'] = f[1:]  + [f[-1]]
-
-        self.results.x = np.array(x[1])
-        self.results.u = np.array(u[0])
-        if self.solver == 'crocoddyl':
-            self.results.k = self.ocp.ddp.K[0]
-
-        self.results.ocp_storage['fs']  += [f]
-        self.results.ocp_storage['xs']  += [np.array(x)]
-        self.results.ocp_storage['acs'] += [np.array(a)]
-        self.results.ocp_storage['us']  += [np.array(u)]
