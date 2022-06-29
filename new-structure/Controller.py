@@ -1,41 +1,61 @@
 from shutil import which
+
+from zmq import device
 from ProblemData import ProblemData, Target
 from utils.PyBulletSimulator import PyBulletSimulator
 import numpy as np
 
-class OCPData:
+class SimulationData:
     def __init__(self):
+        # Optimization data
+        self.x = None
+        self.u = None
+        self.k = None
         self.ocp_storage = {'xs': [], 'acs': [], 'us': [], 'fs': [], 'qj_des': [], 'vj_des': [], 'residuals' : {'inf_pr': [], 'inf_du': []}}
 
+        # Measured data
+        self.x_m = []
+        self.u_m = []
+
+    def make_arrays(self):   
+        self.x_m = np.array(self.x_m)
+        self.u_m = np.array(self.u_m)
+
 class Controller:
-    def __init__(self, pd:ProblemData, target:Target, dt_sim, r, solver):
-        self.results = OCPData()
+    def __init__(self, pd:ProblemData, target:Target, solver):
+        self.pd = pd
+
+        self.results = SimulationData()
         if solver == 'ipopt':
             from CasadiOCP import CasadiOCP as OCP
         elif solver == 'crocoddyl':
             from CrocoddylOCP import CrocoddylOCP as OCP
 
         self.ocp = OCP(pd, target)
-        self.warmstart = {'xs': [], 'acs': [], 'us':[], 'fs': []}
+        self.last_result = {'xs': [], 'acs': [], 'us':[], 'fs': []}
 
         self.solver = solver
-        self.dt_sim = dt_sim
-        self.r = r
+
         self.device = self.Init_simulation(pd.q0[7:])
 
     def Init_simulation(self, q_init):
         device = PyBulletSimulator()
-        device.Init(q_init, 0, True, True, self.dt_sim)
+        device.Init(q_init, 0, True, True, self.pd.dt_sim)
         return device
 
     def tuple_to_array(self, tup):
         a = np.array([element for tupl in tup for element in tupl])
         return a
+    
+    def x2qv(self, x):
+        q = x[7: self.pd.nq]
+        v = x[self.pd.nq + 6 :]
+        return q, v
 
-    def interpolate_traj(self, q_des, v_des):
+    def interpolate_traj(self, q_des, v_des, ratio):
         measures = self.read_state()
-        qj_des_i = np.linspace(measures['qj_m'], q_des, self.r)
-        vj_des_i = np.linspace(measures['vj_m'], v_des, self.r)
+        qj_des_i = np.linspace(measures['qj_m'], q_des, ratio)
+        vj_des_i = np.linspace(measures['vj_m'], v_des, ratio)
 
         return qj_des_i, vj_des_i
 
@@ -48,37 +68,58 @@ class Controller:
         x_m = np.concatenate([bp_m, qj_m, bv_m, vj_m])
         return {'qj_m': qj_m, 'vj_m': vj_m, 'x_m': x_m}
 
-    def store_measures(self, data_storage, all=True):
+    def store_measures(self, all=True):
         m = self.read_state()
-        data_storage.x_m += [m['x_m']]
+        self.results.x_m += [m['x_m']]
         if all == True:
-            data_storage.tau += [self.device.jointTorques]
+            self.results.u_m += [self.device.jointTorques]
 
-    def send_torques(self, x, u, k):
+    def send_torques(self, x, u, k=None):
         if self.solver == 'crocoddyl':
-            for t in range(self.r):
+            for t in range(self.pd.r1):
                 m = self.read_state()
-                feedback = np.dot(k, solver.state.diff(m['x_m'], x))
+                feedback = np.dot(k, self.ocp.state.diff(m['x_m'], x))
                 self.device.joints.set_torques(u + feedback)
                 self.device.send_command_and_wait_end_of_cycle()
 
-            self.store_measures()
+        if self.solver == 'ipopt':
+            q, v = self.x2qv(x)
+            q_des, v_des = self.interpolate_traj(q, v, self.pd.r1)
+            for t in range(self.pd.r1):
+                self.device.joints.set_desired_positions(q_des[t])
+                self.device.joints.set_desired_velocities(v_des[t])
+                self.device.joints.set_position_gains(3)
+                self.device.joints.set_velocity_gains(0.1)
+                self.device.joints.set_torques(u)
+                self.device.send_command_and_wait_end_of_cycle()
+                self.store_measures()
+                
+    
+    def get_q_mpc(self):
+        q_mpc = []
+        [q_mpc.append(x[1][: self.pd.nq]) for x in self.results.ocp_storage['xs']]
+        return np.array(q_mpc)
 
-    def compute_step(self, x0, guess={}):
+    def get_q_sim_mpc(self):
+        return self.results.x_m[:, : self.pd.nq]
+
+    def compute_step(self, x0, guess=None):
         if guess:
-            self.warmstart['xs'] = guess['xs']
-            self.warmstart['us'] = guess['us']
-            if self.solver == 'ipopt':
-                self.warmstart['acs'] = guess['acs']
-                self.warmstart['fs'] = guess['fs']
+            self.ocp.solve(x0, guess=guess)
+        else:
+            self.ocp.solve(x0, guess=self.last_result)
 
-        self.ocp.solve(x0, guess=self.warmstart)
-        _, x, a, u, f, fw = self.ocp.get_results()
+        _, x, a, u, f, _ = self.ocp.get_results()
 
-        self.warmstart['xs'] = x[1:]  + [x[-1]]
-        self.warmstart['acs'] = a[1:] + [a[-1]]
-        self.warmstart['us'] = u[1:]  + [u[-1]]
-        self.warmstart['f_ws'] = f[1:]  + [f[-1]]
+        self.last_result['xs'] = x[1:]  + [x[-1]]
+        self.last_result['acs'] = a[1:] + [a[-1]]
+        self.last_result['us'] = u[1:]  + [u[-1]]
+        self.last_result['fs'] = f[1:]  + [f[-1]]
+
+        self.results.x = np.array(x[1])
+        self.results.u = np.array(u[0])
+        if self.solver == 'crocoddyl':
+            self.results.k = self.ocp.ddp.K[0]
 
         self.results.ocp_storage['fs']  += [f]
         self.results.ocp_storage['xs']  += [np.array(x)]

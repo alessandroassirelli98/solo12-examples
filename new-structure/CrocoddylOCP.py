@@ -116,31 +116,29 @@ class CrocoddylOCP:
         return model
 
 # Solve
-    def solve(self, x0, guess={}):
+    def solve(self, x0, guess=None):
         problem = self.make_crocoddyl_ocp(x0)
-        self._solver = crocoddyl.SolverDDP(problem)
-        self._solver.setCallbacks([crocoddyl.CallbackVerbose()])
+        self.ddp = crocoddyl.SolverDDP(problem)
+        self.ddp.setCallbacks([crocoddyl.CallbackVerbose()])
 
-        for g in guess:
-            if guess[g] == []:
-                print("No warmstart provided")
-                xs = [x0] * (self._solver.problem.T + 1)
-                us = self._solver.problem.quasiStatic(
-                    [x0] * self._solver.problem.T)
-                break
-            else:
-                xs = guess['xs']
-                us = guess['us']
-                print("Using warmstart")
+        if not guess:
+            print("No warmstart provided")
+            xs = [x0] * (self.ddp.problem.T + 1)
+            us = self.ddp.problem.quasiStatic(
+                [x0] * self.ddp.problem.T)
+        else:
+            xs = guess['xs']
+            us = guess['us']
+            print("Using warmstart")
 
-        self._solver.solve(xs, us, 100, False, 1e-9)
+        self.ddp.solve(xs, us, 100, False, 1e-9)
 
     def get_croco_forces(self):
-        d = self._solver.problem.runningDatas[0]
+        d = self.ddp.problem.runningDatas[0]
         cnames = d.differential.multibody.contacts.contacts.todict().keys()
         forces = {n: [] for n in cnames}
 
-        for m in self._solver.problem.runningDatas:
+        for m in self.ddp.problem.runningDatas:
             mdict = m.differential.multibody.contacts.contacts.todict()
             for n in cnames:
                 if n in mdict:
@@ -154,7 +152,7 @@ class CrocoddylOCP:
     def get_croco_forces_ws(self):
         forces = []
 
-        for m in self._solver.problem.runningDatas:
+        for m in self.ddp.problem.runningDatas:
             mdict = m.differential.multibody.contacts.contacts.todict()
             f_tmp = []
             for n in mdict:
@@ -165,12 +163,12 @@ class CrocoddylOCP:
     def get_croco_acc(self):
         acc = []
         [acc.append(m.differential.xout)
-         for m in self._solver.problem.runningDatas]
+         for m in self.ddp.problem.runningDatas]
         return acc
 
     def get_results(self):
-        x = self._solver.xs.tolist()
+        x = self.ddp.xs.tolist()
         a = self.get_croco_acc()
-        u = self._solver.us.tolist()
+        u = self.ddp.us.tolist()
         f_ws = self.get_croco_forces_ws()
         return None, x, a, u, f_ws, None

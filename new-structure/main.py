@@ -1,40 +1,39 @@
 #from ocp import SimpleManipulationProblem
-from Controller import Controller
+from time import time, sleep
+from Controller import SimulationData, Controller
 from ProblemData import ProblemData, Target
 from utils.PyBulletSimulator import PyBulletSimulator
 from pinocchio.visualize import GepettoVisualizer
 import numpy as np
 
 
-
 def control_loop(init_guess, target):
     for t in range(horizon):
         m = ctrl.read_state()
-
         target.update(t)
         if t == 0:
             ctrl.compute_step(pd.x0, init_guess)
+            ctrl.send_torques(ctrl.results.x, ctrl.results.u, ctrl.results.k)
         else:
-            pd.shift_gait()
-            ctrl.compute_step(pd.x0)
+            target.shift_gait()
+            ctrl.compute_step(m['x_m'])
+            ctrl.send_torques(ctrl.results.x, ctrl.results.u, ctrl.results.k)
 
 
 if __name__ == "__main__":
     pd = ProblemData()
     target = Target(pd)
 
-    horizon = 1
-    dt_ocp = pd.dt
-    dt_sim = 0.001
-    r = int(dt_ocp/dt_sim)
+    horizon = 30
 
     #device = Init_simulation(pd.x0[: pd.nq])
-    ctrl = Controller(pd, target, dt_sim, r, 'ipopt')
+    ctrl = Controller(pd, target, 'ipopt')
 
     guesses = np.load('/tmp/sol_crocoddyl.npy', allow_pickle=True).item()
     init_guess = {'xs': list(guesses['xs']), 'us': list(guesses['us']),
                   'acs': guesses['acs'], 'fs': guesses['fs']}
     control_loop(init_guess, target)
+    ctrl.results.make_arrays()
 
     try:
         viz = GepettoVisualizer(
@@ -46,4 +45,7 @@ if __name__ == "__main__":
         print("No viewer")
 
     # SHOW OCP RESULT
-    viz.play(ctrl.results.ocp_storage['xs'][0][:, :19].T, pd.dt)
+    #viz.play(ctrl.results.ocp_storage['xs'][0][:, :19].T, pd.dt)
+    viz.play(ctrl.get_q_mpc().T, pd.dt)
+    sleep(1)
+    viz.play(ctrl.get_q_sim_mpc().T, pd.dt_sim)

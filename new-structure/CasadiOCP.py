@@ -86,10 +86,10 @@ class CasadiOCP:
 
         for data in self.datas:
             data.x = self.opti.value(data.x)
+            data.cost = self.opti.value(data.cost)
             if not data.isTerminal:
                 data.u = self.opti.value(data.u)
                 data.xnext = self.opti.value(data.xnext)
-                data.cost = self.opti.value(data.cost)
 
     def make_opti_variables(self, x0):
         opti = casadi.Opti()
@@ -111,13 +111,12 @@ class CasadiOCP:
 
         eq.append(self.dxs[0])
         for t in range(self.pd.T):
-            print(self.target.contactSequence[t])
             # These change every time! Do not use runningModels[0].x to get the state!!!! use xs[0]
             self.runningModels[t].init(self.datas[t], self.xs[t], self.acs[t], self.us[t], self.fs[t], False)
 
             # If it is landing
-            if (self.target.contactSequence[t] != self.target.contactSequence[t-1] and t >= 1):
-                print('Contact on ', str(self.runningModels[t].contactIds))
+            """ if (self.target.contactSequence[t] != self.target.contactSequence[t-1] and t >= 1):
+                print('Contact on ', str(self.runningModels[t].contactIds)) """
 
             xnext, rcost = self.runningModels[t].calc(x_ref=self.pd.xref,
                                                       u_ref=self.pd.uref,
@@ -168,10 +167,10 @@ class CasadiOCP:
             print("Can't load warm start")
 
     def get_results(self):
-        dxs_sol = np.array([self.opti.value(dx) for dx in self.dxs])
-        xs_sol = np.array([self.opti.value(x) for x in self.xs])
-        us_sol = np.array([self.opti.value(u) for u in self.us])
-        acs_sol = np.array([self.opti.value(a) for a in self.acs])
+        dxs_sol = [self.opti.value(dx) for dx in self.dxs]
+        xs_sol = [self.opti.value(x) for x in self.xs]
+        us_sol = [self.opti.value(u) for u in self.us]
+        acs_sol = [self.opti.value(a) for a in self.acs]
         fsol = {name: [] for name in self.pd.allContactIds}
         fs_world = {name: [] for name in self.pd.allContactIds}
         fsol_to_ws = []
@@ -184,7 +183,7 @@ class CasadiOCP:
             fsol_to_ws.append(np.concatenate([self.opti.value(
                 self.fs[t][j]) for j in range(len(self.runningModels[t].contactIds))]))
 
-            pin.framesForwardKinematics(self.pd.model, self.pd.rdata, xs_sol[t, : self.pd.nq])
+            pin.framesForwardKinematics(self.pd.model, self.pd.rdata, np.array(xs_sol)[t, : self.pd.nq])
             [fs_world[foot].append(self.pd.rdata.oMf[foot].rotation @ fsol[foot][t]) for foot in fs_world]
 
         for foot in fs_world:
