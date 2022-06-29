@@ -1,14 +1,14 @@
-from ProblemData import ProblemData
+from ProblemData import ProblemData, Target
 import crocoddyl
 import pinocchio as pin
 import numpy as np
 
 
 class CrocoddylOCP:
-    def __init__(self, pd):
+    def __init__(self, pd:ProblemData, target:Target):
         self.pd = pd
-
-        self.state = crocoddyl.StateMultibody(self.rmodel)
+        self.target = target
+        self.state = crocoddyl.StateMultibody(self.pd.model)
         self.actuation = crocoddyl.ActuationModelFloatingBase(self.state)
 
     def make_crocoddyl_ocp(self, x0):
@@ -21,22 +21,19 @@ class CrocoddylOCP:
 
         # Compute the current foot positions
         q0 = x0[:self.state.nq]
-        pin.forwardKinematics(self.rmodel, self.rdata, q0)
-        pin.updateFramePlacements(self.rmodel, self.rdata)
+        pin.forwardKinematics(self.pd.model, self.pd.rdata, q0)
+        pin.updateFramePlacements(self.pd.model, self.pd.rdata)
 
         model = []
         for t in range(self.pd.T):
-            target = self.pd.target
-            freeIds = [
-                idf for idf in self.pd.allContactIds if idf not in self.pd.contactSequence[t]]
-            contactIds = self.pd.contactSequence[t]
-            model += self.createFootstepModels(target[t], contactIds, freeIds)
+            target = self.target.evaluate_in_t(t)
+            freeIds = [idf for idf in self.pd.allContactIds if idf not in self.target.contactSequence[t]]
+            contactIds = self.target.contactSequence[t]
+            model += self.createFootstepModels(target, contactIds, freeIds)
 
-        freeIds = [
-            idf for idf in self.pd.allContactIds if idf not in self.pd.contactSequence[self.pd.T]]
-        contactIds = self.pd.contactSequence[self.pd.T]
-        model += self.createFootstepModels(
-            target[self.pd.T], contactIds, freeIds, True)
+        freeIds = [idf for idf in self.pd.allContactIds if idf not in self.target.contactSequence[self.pd.T]]
+        contactIds = self.target.contactSequence[self.pd.T]
+        model += self.createFootstepModels(self.target.evaluate_in_t(self.pd.T), contactIds, freeIds, True)
 
         problem = crocoddyl.ShootingProblem(x0, model[:-1], model[-1])
 
@@ -54,13 +51,10 @@ class CrocoddylOCP:
         footSwingModel = []
         swingFootTask = []
         for i in swingFootIds:
-            tref = target
+            tref = target[i]
             swingFootTask += [[i, pin.SE3(np.eye(3), tref)]]
 
-        footSwingModel += [
-            self.createSwingFootModel(
-                supportFootIds, swingFootTask=swingFootTask, isTerminal=isTerminal)
-        ]
+        footSwingModel += [self.createSwingFootModel(supportFootIds, swingFootTask=swingFootTask, isTerminal=isTerminal)]
         return footSwingModel
 
     def createSwingFootModel(self, supportFootIds, swingFootTask=None, isTerminal=False):
@@ -79,8 +73,7 @@ class CrocoddylOCP:
         for i in supportFootIds:
             supportContactModel = crocoddyl.ContactModel3D(self.state, i, np.array([0., 0., 0.]), nu,
                                                            np.array([0., 0.]))
-            contactModel.addContact(
-                self.rmodel.frames[i].name + "_contact", supportContactModel)
+            contactModel.addContact(self.pd.model.frames[i].name + "_contact", supportContactModel)
 
         # Creating the cost model for a contact phase
         costModel = crocoddyl.CostModelSum(self.state, nu)
@@ -88,49 +81,30 @@ class CrocoddylOCP:
         if not isTerminal:
 
             for i in supportFootIds:
-                cone = crocoddyl.FrictionCone(
-                    self.pd.Rsurf, self.pd.mu, 4, False)
-                coneResidual = crocoddyl.ResidualModelContactFrictionCone(
-                    self.state, i, cone, nu)
-                #forceResidual = crocoddyl.ResidualModelContactForce(self.state, i, np.array([0,0,4]), 3, nu)
-                coneActivation = crocoddyl.ActivationModelQuadraticBarrier(
-                    crocoddyl.ActivationBounds(cone.lb, cone.ub))
-                #forceActivation = crocoddyl.ActivationModelQuadraticBarrier(crocoddyl.ActivationBounds(-1000, 0))
-                frictionCone = crocoddyl.CostModelResidual(
-                    self.state, coneActivation, coneResidual)
-                #force = crocoddyl.CostModelResidual(self.state, forceActivation, forceResidual)
-                costModel.addCost(
-                    self.rmodel.frames[i].name + "_frictionCone", frictionCone, self.pd.friction_cone_w)
-                #costModel.addCost(self.rmodel.frames[i].name + "_unilateral", force, 1e5)
+                cone = crocoddyl.FrictionCone(self.pd.Rsurf, self.pd.mu, 4, False)
+                coneResidual = crocoddyl.ResidualModelContactFrictionCone(self.state, i, cone, nu)
+                coneActivation = crocoddyl.ActivationModelQuadraticBarrier(crocoddyl.ActivationBounds(cone.lb, cone.ub))
+                frictionCone = crocoddyl.CostModelResidual(self.state, coneActivation, coneResidual)
+                costModel.addCost(self.pd.model.frames[i].name + "_frictionCone", frictionCone, self.pd.friction_cone_w)
             if swingFootTask is not None:
                 for i in swingFootTask:
-                    frameTranslationResidual = crocoddyl.ResidualModelFrameTranslation(self.state, i[0], i[1].translation,
-                                                                                       nu)
-                    footTrack = crocoddyl.CostModelResidual(
-                        self.state, frameTranslationResidual)
-                    costModel.addCost(
-                        self.rmodel.frames[i[0]].name + "_footTrack", footTrack, self.pd.foot_tracking_w)
+                    frameTranslationResidual = crocoddyl.ResidualModelFrameTranslation(self.state, i[0], i[1].translation,nu)
+                    footTrack = crocoddyl.CostModelResidual(self.state, frameTranslationResidual)
+                    costModel.addCost(self.pd.model.frames[i[0]].name + "_footTrack", footTrack, self.pd.foot_tracking_w)
 
-            ctrlResidual = crocoddyl.ResidualModelControl(
-                self.state, self.pd.uref)
+            ctrlResidual = crocoddyl.ResidualModelControl(self.state, self.pd.uref)
             ctrlReg = crocoddyl.CostModelResidual(self.state, ctrlResidual)
             costModel.addCost("ctrlReg", ctrlReg, self.pd.control_reg_w)
 
-        stateResidual = crocoddyl.ResidualModelState(
-            self.state, self.pd.xref, nu)
-        stateActivation = crocoddyl.ActivationModelWeightedQuad(
-            self.pd.state_reg_w**2)
-        stateReg = crocoddyl.CostModelResidual(
-            self.state, stateActivation, stateResidual)
+        stateResidual = crocoddyl.ResidualModelState(self.state, self.pd.xref, nu)
+        stateActivation = crocoddyl.ActivationModelWeightedQuad(self.pd.state_reg_w**2)
+        stateReg = crocoddyl.CostModelResidual(self.state, stateActivation, stateResidual)
         costModel.addCost("stateReg", stateReg, 1)
 
         if isTerminal:
-            stateResidual = crocoddyl.ResidualModelState(
-                self.state, self.pd.xref, nu)
-            stateActivation = crocoddyl.ActivationModelWeightedQuad(
-                self.pd.terminal_velocity_w**2)
-            stateReg = crocoddyl.CostModelResidual(
-                self.state, stateActivation, stateResidual)
+            stateResidual = crocoddyl.ResidualModelState(self.state, self.pd.xref, nu)
+            stateActivation = crocoddyl.ActivationModelWeightedQuad(self.pd.terminal_velocity_w**2)
+            stateReg = crocoddyl.CostModelResidual(self.state, stateActivation, stateResidual)
             costModel.addCost("terminalVelocity", stateReg, 1)
 
         dmodel = crocoddyl.DifferentialActionModelContactFwdDynamics(self.state, self.actuation, contactModel,

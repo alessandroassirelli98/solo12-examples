@@ -1,4 +1,5 @@
 from shutil import which
+from ProblemData import ProblemData, Target
 from utils.PyBulletSimulator import PyBulletSimulator
 import numpy as np
 
@@ -7,21 +8,20 @@ class OCPData:
         self.ocp_storage = {'xs': [], 'acs': [], 'us': [], 'fs': [], 'qj_des': [], 'vj_des': [], 'residuals' : {'inf_pr': [], 'inf_du': []}}
 
 class Controller:
-    def __init__(self, problemData, dt_sim, r, solver = 'ipopt'):
-        self.pd = problemData
+    def __init__(self, pd:ProblemData, target:Target, dt_sim, r, solver):
         self.results = OCPData()
         if solver == 'ipopt':
             from CasadiOCP import CasadiOCP as OCP
         elif solver == 'crocoddyl':
             from CrocoddylOCP import CrocoddylOCP as OCP
 
-        self.ocp = OCP(self.pd)
+        self.ocp = OCP(pd, target)
         self.warmstart = {'xs': [], 'acs': [], 'us':[], 'fs': []}
 
         self.solver = solver
         self.dt_sim = dt_sim
         self.r = r
-        self.device = self.Init_simulation(self.pd.q0[7:])
+        self.device = self.Init_simulation(pd.q0[7:])
 
     def Init_simulation(self, q_init):
         device = PyBulletSimulator()

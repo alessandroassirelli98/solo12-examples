@@ -7,7 +7,7 @@ class ProblemData:
         self.dt = 0.015 # OCP dt
         self.init_steps = 10 # full stand phase
         self.target_steps = 50 # manipulation steps
-        self.n_nodes = self.init_steps + self.target_steps
+        self.T = self.init_steps + self.target_steps -1
 
         # Cost function weights
         self.mu = 0.7
@@ -31,7 +31,10 @@ class ProblemData:
         self.q0 = self.robot.q0
         self.nq = self.robot.nq
         self.nv = self.robot.nv
+        self.nx = self.nq + self.nv
+        self.ndx = 2*self.nv
         self.nu = self.nv-6
+        self.ntau = self.nv
 
         self.effort_limit = np.ones(self.nu) *3   
 
@@ -54,21 +57,43 @@ class ProblemData:
         self.lhFootId = self.model.getFrameId(self.lhFoot)
         self.rhFootId = self.model.getFrameId(self.rhFoot)
 
-        self.gait = [] \
-            + [ [ 1,1,1,1 ] ] * self.init_steps \
-            + [ [ 1,0,1,1 ] ] * self.target_steps
-        self.T = len(self.gait)-1
-
-        self.contactSequence = [ self.patternToId(p) for p in self.gait]
-        self.target = None
         self.Rsurf = np.eye(3)
 
+class Target:
+    def __init__(self, pd:ProblemData):
+        self.pd = pd
+        self.dt = pd.dt
+
+        self.gait = [] \
+            + [ [ 1,1,1,1 ] ] * pd.init_steps \
+            + [ [ 1,0,1,1 ] ] * pd.target_steps
+
+        self.T = pd.T
+        self.contactSequence = [ self.patternToId(p) for p in self.gait]
+
+        self.target = {pd.rfFootId: []}
+        self.FR_foot0 = np.array([0.1946, -0.16891, 0.017])
+        self.A = np.array([0, 0.035, 0.035])
+        self.offset = np.array([0.05, 0., 0.06])
+        self.freq = np.array([0, 2.5, 2.5])
+        self.phase = np.array([0, 0, np.pi/2])
+
     def patternToId(self, gait):
-            return tuple(self.allContactIds[i] for i,c in enumerate(gait) if c==1 )
+            return tuple(self.pd.allContactIds[i] for i,c in enumerate(gait) if c==1 )
         
     def shift_gait(self):
         self.gait.pop(0)
         self.gait += [self.gait[-1]]
-        self.contactSequence = [ self.patternToId(p) for p in self.gait]
+        self.contactSequence = [ self.patternToId(p) for p in self.gait]    
+
+    def update(self, t):
+        target = []
+        for n in range(self.T+1):
+            target += [self.FR_foot0 + self.offset + self.A *
+                       np.sin(2*np.pi*self.freq * (n+t) * self.dt + self.phase)]
+        self.target[self.pd.rfFootId] = np.array(target)
+    
+    def evaluate_in_t(self, t):
+        return {e: self.target[e][t] for e in self.target}
 
     
