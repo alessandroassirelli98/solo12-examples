@@ -99,29 +99,51 @@ def plot_mpc(ctrl:Controller):
     t1 = np.linspace(0, (horizon)*ctrl.pd.dt, (horizon)*ctrl.pd.r1+1)
     t_mpc = np.linspace(0, (horizon)*ctrl.pd.dt, horizon+1)
 
-    x_mpc = [ctrl.pd.x0]
-    [x_mpc.append(ctrl.results.ocp_storage['xs'][i][1, :]) for i in range(horizon)]
+    all_ocp_xs = [np.array([ctrl.pd.x0] * len(ctrl.results.ocp_storage['xs'][0]))]
+    [all_ocp_xs.append(x) for x in ctrl.results.ocp_storage['xs'] ]
+    all_ocp_xs = np.array(all_ocp_xs)
+
+    x_mpc = [x[1, :] for x in all_ocp_xs]
     x_mpc = np.array(x_mpc)
 
     feet_p_log_mpc = {id: get_translation_array(ctrl.pd, x_mpc, id)[0] for id in ctrl.pd.allContactIds}
+    feet_p_log_m = {id: get_translation_array(ctrl.pd, ctrl.results.x_m, id, x0=ctrl.pd.x0)[0] for id in ctrl.pd.allContactIds}
 
+    all_ocp_feet_p_log = {idx: [get_translation_array(ctrl.pd, x, idx)[0] for x in all_ocp_xs] for idx in ctrl.pd.allContactIds}
+    for foot in all_ocp_feet_p_log: all_ocp_feet_p_log[foot] = np.array(all_ocp_feet_p_log[foot])
+    
     legend = ['x', 'y', 'z']
     plt.figure(figsize=(12, 6), dpi = 90)
     for i in range(3):
-        for foot in feet_p_log_mpc:
+        for foot in [18]: # Plot only the foot which is free at terminal node
             plt.subplot(3,1,i+1)
             plt.title('Foot position on ' + legend[i])
             plt.plot(t15, feet_p_log_mpc[foot][:, i])
-            """ plt.plot(t1, feet_p_log_mpc[foot][:, i])
-            plt.legend(['OCP', 'BULLET']) """
+            plt.plot(t1, feet_p_log_m[foot][:, i])
+            plt.legend(['OCP', 'BULLET'])
+    plt.draw()
+    
+
+    
+    legend = ['x', 'y', 'z']
+    plt.figure(figsize=(12, 18), dpi = 90)
+    for p in range(3):
+        plt.subplot(3,1, p+1)
+        plt.title('Free foot on ' + legend[p])
+        for i in range(horizon):
+            t = np.linspace(i*ctrl.pd.dt, (ctrl.pd.T+ i)*ctrl.pd.dt, ctrl.ocp.pd.T+1)
+            y = all_ocp_feet_p_log[18][i+1][:,p]
+            for j in range(len(y) - 1):
+                plt.plot(t[j:j+2], y[j:j+2], color='royalblue', linewidth = 3, marker='o' ,alpha=max([1 - j/len(y), 0]))
+        plt.plot(t_mpc, feet_p_log_mpc[18][:, p], linewidth=0.8, color = 'tomato', marker='o')
+        plt.plot(t1, feet_p_log_m[18][:, p], linewidth=2, color = 'lightgreen')
     plt.draw()
     plt.show()
 
-    """feet_log_m = ctrl.ocp.get_feet_position(local_results.x_m)
-    all_ocp_feet_log = [ctrl.ocp.get_feet_position(x)[18] for x in ctrl.results.ocp_storage['xs']]
-    all_ocp_feet_log = np.array(all_ocp_feet_log)
+    
 
-    u_mpc = local_results.tau_ff
+
+    """u_mpc = local_results.tau_ff
     u_mpc = np.array(u_mpc)
     all_u_log = np.array(ocp_results.ocp_storage['us'])
     u_m = np.array(local_results.tau)

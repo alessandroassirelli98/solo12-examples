@@ -27,7 +27,7 @@ if __name__ == "__main__":
     horizon = 20
 
     #device = Init_simulation(pd.x0[: pd.nq])
-    ctrl = Controller(pd, target, 'crocoddyl')
+    ctrl = Controller(pd, target, 'ipopt')
 
     guesses = np.load('/tmp/sol_crocoddyl.npy', allow_pickle=True).item()
     init_guess = {'xs': list(guesses['xs']), 'us': list(guesses['us']),

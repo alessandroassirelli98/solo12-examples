@@ -11,10 +11,15 @@ def get_translation(pd:ProblemData, x, idx, ref_frame=pin.WORLD):
     frame_v = pin.getFrameVelocity(pd.model, pd.rdata, idx, ref_frame).linear
     return frame_p, frame_v
 
-def get_translation_array(pd:ProblemData, x, idx, ref_frame=pin.WORLD):
+def get_translation_array(pd:ProblemData, x, idx, ref_frame=pin.WORLD, x0=None):
     frame_p = []
     frame_v = []
-    for xs in x:
+    if isinstance(x0, np.ndarray):
+        xiter = np.concatenate([x0.reshape(1,-1), x])
+    else:
+        xiter = x
+
+    for xs in xiter:
         q = xs[: pd.nq]
         v = xs[pd.nq :]
         pin.forwardKinematics(pd.model, pd.rdata, q, v)
