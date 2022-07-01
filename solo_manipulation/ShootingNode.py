@@ -185,6 +185,10 @@ class ShootingNode():
             self.cost += self.pd.friction_cone_w * casadi.sumsqr(casadi.if_else(r <= lb, r, 0))/2 * self.pd.dt
             self.cost += self.pd.friction_cone_w * casadi.sumsqr(casadi.if_else(r >= ub, r, 0))/2 * self.pd.dt
 
+    def constraint_control_cost(self):
+        self.cost += self.pd.control_bound_w * casadi.sumsqr(casadi.if_else(self.u <= -self.pd.effort_limit, self.u, 0))/2 * self.pd.dt
+        self.cost += self.pd.control_bound_w * casadi.sumsqr(casadi.if_else(self.u >= self.pd.effort_limit, self.u, 0))/2 * self.pd.dt
+
     def constraint_dynamics_eq(self):
         eq = []
         eq.append(self.acc(self.x, self.tau, *self.fs) - self.a)
@@ -233,6 +237,7 @@ class ShootingNode():
         if not self.isTerminal:
             self.constraint_standing_feet_cost()
             self.control_cost(u_ref)
+            self.constraint_control_cost()
             self.target_cost(target)
 
         self.body_reg_cost(x_ref=x_ref)

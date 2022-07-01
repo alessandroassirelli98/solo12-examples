@@ -1,8 +1,9 @@
 #from ocp import SimpleManipulationProblem
 from time import time, sleep
 from Controller import SimulationData, Controller
-from ProblemData import ProblemData, Target
-from utils.PyBulletSimulator import PyBulletSimulator
+from ProblemData import ProblemData
+from Target import Target
+from utils.BulletWrapper import BulletWrapper
 from pinocchio.visualize import GepettoVisualizer
 import numpy as np
 from plot_utils import plot_mpc
@@ -10,30 +11,31 @@ from plot_utils import plot_mpc
 def control_loop(init_guess, target):
     for t in range(horizon):
         print( "\nSTEP: ", str(t), "\n")
-        m = ctrl.read_state()
+        m = sim.read_state()
         target.update(t)
         if t == 0:
             ctrl.compute_step(pd.x0, init_guess)
-            ctrl.send_torques(ctrl.results.x, ctrl.results.u, ctrl.results.k)
+            sim.send_torques(ctrl.results.x, ctrl.results.u, ctrl.results.k)
         else:
             target.shift_gait()
             ctrl.compute_step(m['x_m'])
-            ctrl.send_torques(ctrl.results.x, ctrl.results.u, ctrl.results.k)
+            sim.send_torques(ctrl.results.x, ctrl.results.u, ctrl.results.k)
 
 
 if __name__ == "__main__":
-    pd = ProblemData()
+    pd = ProblemData() # Remember to modify also the Example Robot Data
     target = Target(pd)
 
-    horizon = 60
+    horizon = 20
 
     #device = Init_simulation(pd.x0[: pd.nq])
     ctrl = Controller(pd, target, 'crocoddyl')
+    sim = BulletWrapper(ctrl)
 
     guesses = np.load('/tmp/sol_crocoddyl.npy', allow_pickle=True).item()
     init_guess = {'xs': list(guesses['xs']), 'us': list(guesses['us']),
                   'acs': guesses['acs'], 'fs': guesses['fs']}
-    ctrl.store_measures()
+    sim.store_measures()
     control_loop(init_guess, target)
     ctrl.results.make_arrays()
     #plot_mpc(ctrl)

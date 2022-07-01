@@ -22,7 +22,7 @@ class pybullet_simulator:
         dt (float): time step of the inverse dynamics
     """
 
-    def __init__(self, q_init, envID, use_flat_plane, enable_pyb_GUI, dt=0.001):
+    def __init__(self, q_init, envID, use_flat_plane, enable_pyb_GUI, useFixedBase, dt=0.001):
         self.applied_force = np.zeros(3)
 
         # Start the client for PyBullet
@@ -276,7 +276,7 @@ class pybullet_simulator:
             EXAMPLE_ROBOT_DATA_MODEL_DIR + "/solo_description/robots"
         )
 
-        self.robotId = pyb.loadURDF("solo12.urdf", robotStartPos, robotStartOrientation)
+        self.robotId = pyb.loadURDF("solo12.urdf", robotStartPos, robotStartOrientation, useFixedBase=useFixedBase)
 
         # Disable default motor control for revolute joints
         self.revoluteJointIndices = [0, 1, 2, 4, 5, 6, 8, 9, 10, 12, 13, 14]
@@ -670,7 +670,7 @@ class PyBulletSimulator:
         self.tau_ff = np.zeros(12)
         self.g = np.array([[0.0], [0.0], [-9.81]])
 
-    def Init(self, q, envID, use_flat_plane, enable_pyb_GUI, dt):
+    def Init(self, q, envID, use_flat_plane, enable_pyb_GUI, useFixedBase, dt):
         """
         Initialize the PyBullet simultor with a given environment and a given state of the robot
 
@@ -682,7 +682,7 @@ class PyBulletSimulator:
             enable_pyb_GUI (bool): to display PyBullet GUI or not
             dt (float): time step of the simulation
         """
-        self.pyb_sim = pybullet_simulator(q, envID, use_flat_plane, enable_pyb_GUI, dt)
+        self.pyb_sim = pybullet_simulator(q, envID, use_flat_plane, enable_pyb_GUI, useFixedBase, dt)
         self.q_init = q
         self.joints.positions[:] = q
         self.dt = dt

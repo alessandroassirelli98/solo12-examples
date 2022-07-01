@@ -112,6 +112,7 @@ def plot_mpc(ctrl:Controller):
 
     all_ocp_feet_p_log = {idx: [get_translation_array(ctrl.pd, x, idx)[0] for x in all_ocp_xs] for idx in ctrl.pd.allContactIds}
     for foot in all_ocp_feet_p_log: all_ocp_feet_p_log[foot] = np.array(all_ocp_feet_p_log[foot])
+
     
     legend = ['x', 'y', 'z']
     plt.figure(figsize=(12, 6), dpi = 90)
@@ -153,6 +154,8 @@ def plot_mpc(ctrl:Controller):
         plt.plot(t_mpc, x_mpc[:, 7 + q], linewidth=0.8, color = 'tomato', marker='o')
         plt.plot(t1, ctrl.results.x_m[:, 7+ q], linewidth=2, color = 'lightgreen')
         #plt.ylim([0.18, 0.25])
+       
+
     plt.draw()
     plt.show()
 

@@ -1,4 +1,5 @@
-from ProblemData import ProblemData, Target
+from ProblemData import ProblemData
+from Target import Target
 import crocoddyl
 import pinocchio as pin
 import numpy as np
@@ -9,7 +10,10 @@ class CrocoddylOCP:
         self.pd = pd
         self.target = target
         self.state = crocoddyl.StateMultibody(self.pd.model)
-        self.actuation = crocoddyl.ActuationModelFloatingBase(self.state)
+        if pd.useFixedBase == 0:
+            self.actuation = crocoddyl.ActuationModelFloatingBase(self.state)
+        else:
+            self.actuation = crocoddyl.ActuationModelAbstract(self.state, pd.nu)
 
     def make_crocoddyl_ocp(self, x0):
         """ Create a shooting problem for a simple walking gait.
@@ -96,10 +100,10 @@ class CrocoddylOCP:
             ctrlReg = crocoddyl.CostModelResidual(self.state, ctrlResidual)
             costModel.addCost("ctrlReg", ctrlReg, self.pd.control_reg_w)
 
-            """ ctrl_bound_residual = crocoddyl.ResidualModelControl(self.state, nu)
+            ctrl_bound_residual = crocoddyl.ResidualModelControl(self.state, nu)
             ctrl_bound_activation = crocoddyl.ActivationModelQuadraticBarrier(crocoddyl.ActivationBounds(-self.pd.effort_limit, self.pd.effort_limit))
             ctrl_bound = crocoddyl.CostModelResidual(self.state, ctrl_bound_activation, ctrl_bound_residual)
-            costModel.addCo """
+            costModel.addCost("ctrlBound", ctrl_bound, self.pd.control_bound_w)
 
         stateResidual = crocoddyl.ResidualModelState(self.state, self.pd.xref, nu)
         stateActivation = crocoddyl.ActivationModelWeightedQuad(self.pd.state_reg_w**2)
