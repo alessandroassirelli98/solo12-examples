@@ -107,7 +107,8 @@ def plot_mpc(ctrl:Controller):
     x_mpc = np.array(x_mpc)
 
     feet_p_log_mpc = {id: get_translation_array(ctrl.pd, x_mpc, id)[0] for id in ctrl.pd.allContactIds}
-    feet_p_log_m = {id: get_translation_array(ctrl.pd, ctrl.results.x_m, id, x0=ctrl.pd.x0)[0] for id in ctrl.pd.allContactIds}
+    feet_p_log_m = {id: get_translation_array(ctrl.pd, ctrl.results.x_m, id)[0] for id in ctrl.pd.allContactIds}
+    feet_v_log_mpc = {id: get_translation_array(ctrl.pd, x_mpc, id)[1] for id in ctrl.pd.allContactIds}
 
     all_ocp_feet_p_log = {idx: [get_translation_array(ctrl.pd, x, idx)[0] for x in all_ocp_xs] for idx in ctrl.pd.allContactIds}
     for foot in all_ocp_feet_p_log: all_ocp_feet_p_log[foot] = np.array(all_ocp_feet_p_log[foot])
@@ -137,6 +138,21 @@ def plot_mpc(ctrl:Controller):
                 plt.plot(t[j:j+2], y[j:j+2], color='royalblue', linewidth = 3, marker='o' ,alpha=max([1 - j/len(y), 0]))
         plt.plot(t_mpc, feet_p_log_mpc[18][:, p], linewidth=0.8, color = 'tomato', marker='o')
         plt.plot(t1, feet_p_log_m[18][:, p], linewidth=2, color = 'lightgreen')
+        #plt.ylim([0.18, 0.25])
+
+
+    plt.figure(figsize=(12, 24), dpi = 90)
+    for q in range(12):
+        plt.subplot(6,2, q+1)
+        plt.title('q ' + str(q+7))
+        for i in range(horizon):
+            t = np.linspace(i*ctrl.pd.dt, (ctrl.pd.T+ i)*ctrl.pd.dt, ctrl.ocp.pd.T+1)
+            y = all_ocp_xs[i+1][:, 7+q]
+            for j in range(len(y) - 1):
+                plt.plot(t[j:j+2], y[j:j+2], color='royalblue', linewidth = 3, marker='o' ,alpha=max([1 - j/len(y), 0]))
+        plt.plot(t_mpc, x_mpc[:, 7 + q], linewidth=0.8, color = 'tomato', marker='o')
+        plt.plot(t1, ctrl.results.x_m[:, 7+ q], linewidth=2, color = 'lightgreen')
+        #plt.ylim([0.18, 0.25])
     plt.draw()
     plt.show()
 

@@ -96,6 +96,11 @@ class CrocoddylOCP:
             ctrlReg = crocoddyl.CostModelResidual(self.state, ctrlResidual)
             costModel.addCost("ctrlReg", ctrlReg, self.pd.control_reg_w)
 
+            """ ctrl_bound_residual = crocoddyl.ResidualModelControl(self.state, nu)
+            ctrl_bound_activation = crocoddyl.ActivationModelQuadraticBarrier(crocoddyl.ActivationBounds(-self.pd.effort_limit, self.pd.effort_limit))
+            ctrl_bound = crocoddyl.CostModelResidual(self.state, ctrl_bound_activation, ctrl_bound_residual)
+            costModel.addCo """
+
         stateResidual = crocoddyl.ResidualModelState(self.state, self.pd.xref, nu)
         stateActivation = crocoddyl.ActivationModelWeightedQuad(self.pd.state_reg_w**2)
         stateReg = crocoddyl.CostModelResidual(self.state, stateActivation, stateResidual)
@@ -118,7 +123,7 @@ class CrocoddylOCP:
 # Solve
     def solve(self, x0, guess=None):
         problem = self.make_crocoddyl_ocp(x0)
-        self.ddp = crocoddyl.SolverDDP(problem)
+        self.ddp = crocoddyl.SolverFDDP(problem)
         self.ddp.setCallbacks([crocoddyl.CallbackVerbose()])
 
         if not guess:
@@ -129,9 +134,9 @@ class CrocoddylOCP:
         else:
             xs = guess['xs']
             us = guess['us']
-            print("Using warmstart")
+            #print("Using warmstart")
 
-        self.ddp.solve(xs, us, 100, False, 1e-9)
+        self.ddp.solve(xs, us, 100, False)
 
     def get_croco_forces(self):
         d = self.ddp.problem.runningDatas[0]

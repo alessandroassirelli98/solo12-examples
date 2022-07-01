@@ -15,7 +15,7 @@ class ProblemData:
 
         # Cost function weights
         self.mu = 0.7
-        self.foot_tracking_w = 1e5
+        self.foot_tracking_w = 1e3
         self.control_reg_w = 1e1
         self.state_reg_w = np.array([0] * 3 \
                             + [1e1] * 3 \
@@ -24,7 +24,7 @@ class ProblemData:
                             + [1e0] * 6
                             + [0] * 6 \
                             + [1e1] * 3 \
-                            + [1e0] * 3\
+                            + [1e-1] * 3\
                             + [1e1] * 6 ) 
         self.terminal_velocity_w = np.array([0] * 18 + [1e3] * 18 )
         self.friction_cone_w = 1e3
@@ -77,7 +77,7 @@ class Target:
 
         self.target = {pd.rfFootId: []}
         self.FR_foot0 = np.array([0.1946, -0.16891, 0.017])
-        self.A = np.array([0, 0.035, 0.035])
+        self.A = np.array([0, 0.05, 0.05])
         self.offset = np.array([0.05, 0., 0.06])
         self.freq = np.array([0, 2.5, 2.5])
         self.phase = np.array([0, 0, np.pi/2])

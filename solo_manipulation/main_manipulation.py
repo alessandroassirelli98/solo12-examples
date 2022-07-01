@@ -9,6 +9,7 @@ from plot_utils import plot_mpc
 
 def control_loop(init_guess, target):
     for t in range(horizon):
+        print( "\nSTEP: ", str(t), "\n")
         m = ctrl.read_state()
         target.update(t)
         if t == 0:
@@ -24,17 +25,18 @@ if __name__ == "__main__":
     pd = ProblemData()
     target = Target(pd)
 
-    horizon = 20
+    horizon = 60
 
     #device = Init_simulation(pd.x0[: pd.nq])
-    ctrl = Controller(pd, target, 'ipopt')
+    ctrl = Controller(pd, target, 'crocoddyl')
 
     guesses = np.load('/tmp/sol_crocoddyl.npy', allow_pickle=True).item()
     init_guess = {'xs': list(guesses['xs']), 'us': list(guesses['us']),
                   'acs': guesses['acs'], 'fs': guesses['fs']}
+    ctrl.store_measures()
     control_loop(init_guess, target)
     ctrl.results.make_arrays()
-    plot_mpc(ctrl)
+    #plot_mpc(ctrl)
 
     try:
         viz = GepettoVisualizer(

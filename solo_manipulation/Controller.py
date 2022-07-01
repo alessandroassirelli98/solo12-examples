@@ -4,6 +4,7 @@ from zmq import device
 from ProblemData import ProblemData, Target
 from utils.PyBulletSimulator import PyBulletSimulator
 import numpy as np
+from sklearn.linear_model import LinearRegression
 
 class SimulationData:
     def __init__(self):
@@ -46,12 +47,14 @@ class Controller:
 
             _, x, a, u, f, _ = self.ocp.get_results()
 
-            self.last_result['xs'] = x[1:]  + [x[-1]]
-            self.last_result['acs'] = a[1:] + [a[-1]]
-            self.last_result['us'] = u[1:]  + [u[-1]]
-            self.last_result['fs'] = f[1:]  + [f[-1]]
+            #t = np.array([self.pd.dt*i for i in range(len(x)-1)])
 
-            self.results.x = np.array(x[1])
+            self.last_result['xs'] = x[1:]  + [ (x[-1]- x[-2])/2] #x[-1] (x[-1]- x[-2])/2]
+            self.last_result['acs'] = a[1:] + [ (a[-1]- a[-2])/2] #a[-1] (a[-1]- a[-2])/2]
+            self.last_result['us'] = u[1:]  + [ (u[-1]- u[-2])/2]#u[-1] (u[-1]- u[-2])/2]
+            self.last_result['fs'] = f[1:]  + [ (f[-1]- f[-2])/2] #f[-1] (f[-1]- f[-2])/2]
+
+            self.results.x = np.array(x[0])
             self.results.u = np.array(u[0])
             if self.solver == 'crocoddyl':
                 self.results.k = self.ocp.ddp.K[0]
@@ -83,16 +86,22 @@ class Controller:
 
     def send_torques(self, x, u, k=None):
         if self.solver == 'crocoddyl':
-            q, v = self.x2qv(x)
+            """ q, v = self.x2qv(x)
             q_des, v_des = self.interpolate_traj(q, v, self.pd.r1)
             for t in range(self.pd.r1):
                 self.device.joints.set_desired_positions(q_des[t])
                 self.device.joints.set_desired_velocities(v_des[t])
                 self.device.joints.set_position_gains(3)
                 self.device.joints.set_velocity_gains(0.1)
+                self.device.joints.set_torques(u)
+                self.device.send_command_and_wait_end_of_cycle()
+
+                self.store_measures() """
+
+            for t in range(self.pd.r1):
                 m = self.read_state()
                 feedback = np.dot(k, self.ocp.state.diff(m['x_m'], x))
-                self.device.joints.set_torques(u)
+                self.device.joints.set_torques(u + feedback)
                 self.device.send_command_and_wait_end_of_cycle()
 
                 self.store_measures()
@@ -107,7 +116,7 @@ class Controller:
                 self.device.joints.set_velocity_gains(0.1)
                 self.device.joints.set_torques(u)
                 self.device.send_command_and_wait_end_of_cycle()
-                
+
                 self.store_measures()
 
     def tuple_to_array(self, tup):
