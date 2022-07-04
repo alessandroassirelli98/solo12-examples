@@ -15,11 +15,15 @@ def control_loop(init_guess, target):
 
         target.update(t)
         if t == 0:
+            start_time = time()
             ctrl.compute_step(pd.x0)
+            print("Time: ", time()-start_time, '\n')
             sim.send_torques(ctrl.results.x, ctrl.results.u, ctrl.results.k)
         else:
             target.shift_gait()
-            ctrl.compute_step(m['x_full_m'], loadPreviousSol=True)
+            start_time = time()
+            ctrl.compute_step(m['x_m'], loadPreviousSol=True)
+            print("Time: ", time()-start_time, '\n')
             sim.send_torques(ctrl.results.x, ctrl.results.u, ctrl.results.k)
 
 
@@ -27,7 +31,7 @@ if __name__ == "__main__":
     pd = ProblemDataFull() # Remember to modify also the Example Robot Data
     target = Target(pd)
 
-    horizon = 30
+    horizon = 100
 
     #device = Init_simulation(pd.x0[: pd.nq])
     ctrl = Controller(pd, target, 'crocoddyl')
@@ -36,7 +40,7 @@ if __name__ == "__main__":
     sim.store_measures()
     control_loop(None, target)
     ctrl.results.make_arrays()
-    #plot_mpc(ctrl)
+    plot_mpc(ctrl)
 
     try:
         viz = GepettoVisualizer(

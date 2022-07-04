@@ -8,8 +8,8 @@ class Target:
         self.dt = pd.dt
 
         self.gait = [] \
-            + [ [ 1,1,1,1 ] ] * pd.init_steps \
-            + [ [ 1,0,1,1 ] ] * pd.target_steps
+            + [ [ 0,0,0,0 ] ] * pd.init_steps \
+            + [ [ 0,0,0,0 ] ] * pd.target_steps
 
         self.T = pd.T
         self.contactSequence = [ self.patternToId(p) for p in self.gait]

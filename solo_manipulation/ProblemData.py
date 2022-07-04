@@ -60,8 +60,8 @@ class ProblemData:
         self.uref = self.u0
 
         self.lfFoot, self.rfFoot, self.lhFoot, self.rhFoot = 'FL_FOOT', 'FR_FOOT', 'HL_FOOT', 'HR_FOOT'
-        cnames = [self.lfFoot, self.rfFoot, self.lhFoot, self.rhFoot]
-        self.allContactIds = [ self.model.getFrameId(f) for f in cnames]
+        self.cnames = [self.lfFoot, self.rfFoot, self.lhFoot, self.rhFoot]
+        self.allContactIds = [ self.model.getFrameId(f) for f in self.cnames]
         self.lfFootId = self.model.getFrameId(self.lfFoot)
         self.rfFootId = self.model.getFrameId(self.rfFoot)
         self.lhFootId = self.model.getFrameId(self.lhFoot)
@@ -79,8 +79,8 @@ class ProblemDataFull:
         self.dt_bldc = 0.0005
         self.r1 = int(self.dt / self.dt_sim)
         self.r2 = int(self.dt_sim / self.dt_bldc)
-        self.init_steps = 10 # full stand phase
-        self.target_steps = 50 # manipulation steps
+        self.init_steps = 0 # full stand phase
+        self.target_steps = 20 # manipulation steps
         self.T = self.init_steps + self.target_steps -1
 
         # Cost function weights
@@ -122,8 +122,8 @@ class ProblemDataFull:
         self.uref = self.u0
 
         self.lfFoot, self.rfFoot, self.lhFoot, self.rhFoot = 'FL_FOOT', 'FR_FOOT', 'HL_FOOT', 'HR_FOOT'
-        cnames = [self.lfFoot, self.rfFoot, self.lhFoot, self.rhFoot]
-        self.allContactIds = [ self.model.getFrameId(f) for f in cnames]
+        self.cnames = [self.lfFoot, self.rfFoot, self.lhFoot, self.rhFoot]
+        self.allContactIds = [ self.model.getFrameId(f) for f in self.cnames]
         self.lfFootId = self.model.getFrameId(self.lfFoot)
         self.rfFootId = self.model.getFrameId(self.rfFoot)
         self.lhFootId = self.model.getFrameId(self.lhFoot)

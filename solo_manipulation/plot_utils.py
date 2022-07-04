@@ -106,6 +106,9 @@ def plot_mpc(ctrl:Controller):
     x_mpc = [x[1, :] for x in all_ocp_xs]
     x_mpc = np.array(x_mpc)
 
+    u_mpc = [u[0] for u in ctrl.results.ocp_storage['us']]
+    u_mpc = np.array(u_mpc)
+
     feet_p_log_mpc = {id: get_translation_array(ctrl.pd, x_mpc, id)[0] for id in ctrl.pd.allContactIds}
     feet_p_log_m = {id: get_translation_array(ctrl.pd, ctrl.results.x_m, id)[0] for id in ctrl.pd.allContactIds}
     feet_v_log_mpc = {id: get_translation_array(ctrl.pd, x_mpc, id)[1] for id in ctrl.pd.allContactIds}
@@ -123,6 +126,19 @@ def plot_mpc(ctrl:Controller):
             plt.plot(t15, feet_p_log_mpc[foot][:, i])
             plt.plot(t1, feet_p_log_m[foot][:, i])
             plt.legend(['OCP', 'BULLET'])
+    plt.draw()
+
+    legend = ['Hip', 'Shoulder', 'Knee']
+    plt.figure(figsize=(12, 6), dpi = 90)
+    for i in range(4):
+        plt.subplot(2,2,i+1)
+        plt.title('Joint torques of ' + ctrl.pd.cnames[i])
+        [plt.plot(t_mpc[:-1], u_mpc[:, (3*i+jj)]) for jj in range(3) ]
+        plt.axhline(y=ctrl.pd.effort_limit[0], color= 'black', linestyle = '--')
+        plt.axhline(y=-ctrl.pd.effort_limit[0], color= 'black', linestyle = '--')
+        plt.ylabel('Torque [N/m]')
+        plt.xlabel('t[s]')
+        plt.legend(legend)
     plt.draw()
     
 
@@ -142,7 +158,8 @@ def plot_mpc(ctrl:Controller):
         #plt.ylim([0.18, 0.25])
 
 
-    plt.figure(figsize=(12, 24), dpi = 90)
+
+    """ plt.figure(figsize=(12, 24), dpi = 90)
     for q in range(12):
         plt.subplot(6,2, q+1)
         plt.title('q ' + str(q+7))
@@ -153,7 +170,7 @@ def plot_mpc(ctrl:Controller):
                 plt.plot(t[j:j+2], y[j:j+2], color='royalblue', linewidth = 3, marker='o' ,alpha=max([1 - j/len(y), 0]))
         plt.plot(t_mpc, x_mpc[:, 7 + q], linewidth=0.8, color = 'tomato', marker='o')
         plt.plot(t1, ctrl.results.x_m[:, 7+ q], linewidth=2, color = 'lightgreen')
-        #plt.ylim([0.18, 0.25])
+        #plt.ylim([0.18, 0.25]) """
        
 
     plt.draw()
