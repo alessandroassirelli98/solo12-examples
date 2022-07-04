@@ -38,16 +38,18 @@ class Controller:
 
         self.solver = solver
 
-    def compute_step(self, x0, guess=None):
+    def compute_step(self, x0, loadPreviousSol = False, guess=None):
             if guess:
                 self.ocp.solve(x0, guess=guess)
-            else:
+            elif loadPreviousSol:
                 self.ocp.solve(x0, guess=self.last_result)
+            else:
+                self.ocp.solve(x0)
 
             _, x, a, u, f, _ = self.ocp.get_results()
             
 
-            print("Difference between starting point and initial state: ", x0 - x[0])
+            #print("Difference between starting point and initial state: ", x0 - x[0])
 
             #t = np.array([self.pd.dt*i for i in range(len(x)-1)])
 
@@ -57,16 +59,18 @@ class Controller:
             #self.last_result['fs'] = f[1:]  + [ (f[-1]- f[-2])/2] 
 
             # With this it's working
-            #self.last_result['xs'] = x[1:]  + [x[-1] * 0]           
-            #self.last_result['acs'] = a[1:] + [a[-1] * 0]           
-            #self.last_result['us'] = u[1:]  + [u[-1] * 0]           
-            #self.last_result['fs'] = f[1:]  + [f[-1] * 0] 
-
+            
+            #self.last_result['xs'] = x[1:]  + [x[-1] * 0]            
+            #self.last_result['acs'] = a[1:] + [a[-1] * 0]                      
+            #self.last_result['us'] = u[1:]  + [u[-1] * 0]
+            if self.pd.useFixedBase == 0:           
+                self.last_result['fs'] = f[1:]  + [f[-1] * 0]
+            
             # Use this to break 
             self.last_result['xs'] = x[1:]  + [x[-1]]           
             self.last_result['acs'] = a[1:] + [a[-1]]           
             self.last_result['us'] = u[1:]  + [u[-1]]           
-            self.last_result['fs'] = f[1:]  + [f[-1]]    
+            #self.last_result['fs'] = f[1:]  + [f[-1]]      
             
             #self.last_result['xs'] = x[1:]  + [x[-1] + (x[-1]- x[-2])/2]           
             #self.last_result['acs'] = a[1:] + [a[-1] + (a[-1]- a[-2])/2]           

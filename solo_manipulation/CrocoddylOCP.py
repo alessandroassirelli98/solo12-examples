@@ -13,7 +13,7 @@ class CrocoddylOCP:
         if pd.useFixedBase == 0:
             self.actuation = crocoddyl.ActuationModelFloatingBase(self.state)
         else:
-            self.actuation = crocoddyl.ActuationModelAbstract(self.state, pd.nu)
+            self.actuation = crocoddyl.ActuationModelFull(self.state)
 
     def make_crocoddyl_ocp(self, x0):
         """ Create a shooting problem for a simple walking gait.
@@ -55,8 +55,11 @@ class CrocoddylOCP:
         footSwingModel = []
         swingFootTask = []
         for i in swingFootIds:
-            tref = target[i]
-            swingFootTask += [[i, pin.SE3(np.eye(3), tref)]]
+            try:
+                tref = target[i]
+                swingFootTask += [[i, pin.SE3(np.eye(3), tref)]]
+            except:
+                pass
 
         footSwingModel += [self.createSwingFootModel(supportFootIds, swingFootTask=swingFootTask, isTerminal=isTerminal)]
         return footSwingModel
@@ -133,14 +136,13 @@ class CrocoddylOCP:
         if not guess:
             print("No warmstart provided")
             xs = [x0] * (self.ddp.problem.T + 1)
-            us = self.ddp.problem.quasiStatic(
-                [x0] * self.ddp.problem.T)
+            us = self.ddp.problem.quasiStatic([x0] * self.ddp.problem.T)
         else:
             xs = guess['xs']
             us = guess['us']
-            #print("Using warmstart")
+            print("Using warmstart")
 
-        self.ddp.solve(xs, us, 100, False)
+        self.ddp.solve(xs, us, 30, False)
 
     def get_croco_forces(self):
         d = self.ddp.problem.runningDatas[0]
@@ -179,5 +181,9 @@ class CrocoddylOCP:
         x = self.ddp.xs.tolist()
         a = self.get_croco_acc()
         u = self.ddp.us.tolist()
-        f_ws = self.get_croco_forces_ws()
+        if self.pd.useFixedBase == 0:
+            f_ws = self.get_croco_forces_ws()
+        else:
+            f_ws = []
+
         return None, x, a, u, f_ws, None

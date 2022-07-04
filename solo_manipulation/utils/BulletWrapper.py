@@ -18,7 +18,7 @@ class BulletWrapper:
         bp_m = self.tuple_to_array(self.device.baseState)
         bv_m = self.tuple_to_array(self.device.baseVel)
         x_m = np.concatenate([bp_m, qj_m, bv_m, vj_m])
-        return {'qj_m': qj_m, 'vj_m': vj_m, 'x_m': x_m}
+        return {'qj_m': qj_m, 'vj_m': vj_m, 'x_full_m': np.concatenate([qj_m, vj_m]), 'x_m': x_m}
 
     def store_measures(self, all=True):
         m = self.read_state()
@@ -30,7 +30,10 @@ class BulletWrapper:
         if self.ctrl.solver == 'crocoddyl':
             for t in range(self.ctrl.pd.r1):
                 m = self.read_state()
-                feedback = np.dot(k, self.ctrl.ocp.state.diff(m['x_m'], x))
+                if self.ctrl.pd.useFixedBase == 0:
+                    feedback = np.dot(k, self.ctrl.ocp.state.diff(m['x_m'], x))
+                else:
+                    feedback = np.dot(k, self.ctrl.ocp.state.diff(m['x_full_m'], x))
                 self.device.joints.set_torques(u + feedback)
                 self.device.send_command_and_wait_end_of_cycle()
 

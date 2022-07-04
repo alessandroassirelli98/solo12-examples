@@ -9,7 +9,8 @@ import pinocchio as pin
 import pinocchio.casadi as cpin
 from pinocchio.visualize import GepettoVisualizer
 from ShootingNode import ShootingNode
-from ProblemData import ProblemData, Target
+from ProblemData import ProblemData
+from Target import Target
 
 plt.style.use('seaborn')
 path = os.getcwd()
@@ -67,7 +68,7 @@ class CasadiOCP:
         self.opti.minimize(self.cost)
         self.opti.subject_to(eq_constraints == 0)
 
-        p_opts = {}
+        p_opts = {"expand": False}
         s_opts = {"tol": 1e-8,
                   "acceptable_tol": 1e-8,
                   # "max_iter": 21,

@@ -6,7 +6,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pinocchio as pin
 from pinocchio import casadi as cpin
-from ProblemData import ProblemData, Target
+from ProblemData import ProblemData
+from Target import Target
 
 
 plt.style.use('seaborn')

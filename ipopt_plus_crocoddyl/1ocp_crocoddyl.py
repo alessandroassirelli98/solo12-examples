@@ -26,7 +26,7 @@ def control_loop(ctrl):
     ctrl.create_target(0)
 
     try:
-        guesses = np.load('/tmp/sol_ipopt.npy',allow_pickle=True).item()
+        #guesses = np.load('/tmp/sol_ipopt.npy',allow_pickle=True).item()
         ws = {'xs': list(guesses['xs']), 'us': list(guesses['us']) }
         ctrl.compute_step(ctrl.x0, ctrl.x0, ctrl.u0, ws)
         print("Solving with warmstart")
