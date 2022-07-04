@@ -7,9 +7,16 @@ class Target:
         self.pd = pd
         self.dt = pd.dt
 
-        self.gait = [] \
-            + [ [ 0,0,0,0 ] ] * pd.init_steps \
-            + [ [ 0,0,0,0 ] ] * pd.target_steps
+        if pd.useFixedBase == 0:
+            self.gait = [] \
+                + [ [ 1,1,1,1 ] ] * pd.init_steps \
+                + [ [ 1,0,1,1 ] ] * pd.target_steps
+        elif pd.useFixedBase == 1:
+            self.gait = [] \
+                + [ [ 0,1,0,0 ] ] * pd.init_steps \
+                + [ [ 0,0,0,0 ] ] * pd.target_steps
+        else:
+            print("'useFixedBase' can be either 0 or 1 !")
 
         self.T = pd.T
         self.contactSequence = [ self.patternToId(p) for p in self.gait]
