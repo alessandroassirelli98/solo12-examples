@@ -60,16 +60,16 @@ class Controller:
 
             # With this it's working
             
-            #self.last_result['xs'] = x[1:]  + [x[-1] * 0]            
-            #self.last_result['acs'] = a[1:] + [a[-1] * 0]                      
-            #self.last_result['us'] = u[1:]  + [u[-1] * 0]
+            self.last_result['xs'] = x[1:]  + [x[-1] * 0]            
+            self.last_result['acs'] = a[1:] + [a[-1] * 0]                      
+            self.last_result['us'] = u[1:]  + [u[-1] * 0]
             if self.pd.useFixedBase == 0:           
                 self.last_result['fs'] = f[1:]  + [f[-1] * 0]
             
             # Use this to break 
-            self.last_result['xs'] = x[1:]  + [x[-1]]           
-            self.last_result['acs'] = a[1:] + [a[-1]]           
-            self.last_result['us'] = u[1:]  + [u[-1]]           
+            #self.last_result['xs'] = x[1:]  + [x[-1]]           
+            #self.last_result['acs'] = a[1:] + [a[-1]]           
+            #self.last_result['us'] = u[1:]  + [u[-1]]           
             #self.last_result['fs'] = f[1:]  + [f[-1]]      
             
             #self.last_result['xs'] = x[1:]  + [x[-1] + (x[-1]- x[-2])/2]           
