@@ -1,9 +1,10 @@
+from tracemalloc import start
 from ProblemData import ProblemData
 from Target import Target
 import crocoddyl
 import pinocchio as pin
 import numpy as np
-
+from time import time
 
 class CrocoddylOCP:
     def __init__(self, pd:ProblemData, target:Target):
@@ -141,8 +142,9 @@ class CrocoddylOCP:
             xs = guess['xs']
             us = guess['us']
             print("Using warmstart")
-
-        self.ddp.solve(xs, us, 30, False)
+        start_time = time()
+        self.ddp.solve(xs, us, 1, False)
+        print("Solver time: ", time()- start_time, "\n")
 
     def get_croco_forces(self):
         d = self.ddp.problem.runningDatas[0]
