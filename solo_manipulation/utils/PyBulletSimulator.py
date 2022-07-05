@@ -280,7 +280,8 @@ class pybullet_simulator:
         self.robotId = pyb.loadURDF("solo12.urdf", robotStartPos, robotStartOrientation, useFixedBase=useFixedBase)
 
         # Disable default motor control for revolute joints
-        self.revoluteJointIndices = [0, 1, 2, 4, 5, 6, 8, 9, 10, 12, 13, 14]
+        self.revoluteJointIndices = [0, 1, 2, 4, 5, 6, 8, 9, 10, 12, 13, 14] if useFixedBase==0 else [4,5,6]
+        
         pyb.setJointMotorControlArray(
             self.robotId,
             jointIndices=self.revoluteJointIndices,

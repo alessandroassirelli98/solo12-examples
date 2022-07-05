@@ -31,7 +31,7 @@ class problemDataAbstract:
         self.nx = self.nq + self.nv
         self.ndx = 2*self.nv
         self.nu = 12 - len(frozen_names)  + 1 if len(frozen_names) != 0 else 12 # -1 to take into account the freeflyer
-        self.ntau = 12 - len(frozen_names)  + 1 if len(frozen_names) != 0 else 12
+        self.ntau = self.nv
 
         self.effort_limit = np.ones(self.nu) *3   
 

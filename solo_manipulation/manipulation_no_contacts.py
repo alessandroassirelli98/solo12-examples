@@ -33,7 +33,6 @@ if __name__ == "__main__":
 
     horizon = 100
 
-    #device = Init_simulation(pd.x0[: pd.nq])
     ctrl = Controller(pd, target, 'crocoddyl')
     #sim = BulletWrapper(ctrl)
 
