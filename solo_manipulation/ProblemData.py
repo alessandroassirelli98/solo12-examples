@@ -10,12 +10,14 @@ class problemDataAbstract:
         self.r1 = int(self.dt / self.dt_sim)
         self.r2 = int(self.dt_sim / self.dt_bldc)
         self.init_steps = 10 # full stand phase
-        self.target_steps = 1 # manipulation steps
+        self.target_steps = 20 # manipulation steps
         self.T = self.init_steps + self.target_steps -1
 
         self.robot = erd.load("solo12")
         self.model = self.robot.model
         self.rdata = self.model.createData()
+        self.collision_model = self.robot.collision_model
+        self.visual_model = self.robot.visual_model
         self.q0 = self.robot.q0
         self.nq = self.robot.nq
         self.nv = self.robot.nv
@@ -82,12 +84,13 @@ class ProblemDataFull(problemDataAbstract):
 
         # Cost function weights
         self.mu = 0.7
-        self.foot_tracking_w = 1e2
+        self.foot_tracking_w = 1e2 
         self.friction_cone_w = 1e3
+
         self.control_bound_w = 1e3
         self.control_reg_w = 1e1
         self.state_reg_w = np.array( [1e0] * 3 \
-                            + [1e-3] * 3\
+                            + [1e0] * 3\
                             + [1e0] * 6
                             + [1e1] * 3 \
                             + [1e-1] * 3\
@@ -102,5 +105,16 @@ class ProblemDataFull(problemDataAbstract):
 
         self.xref = self.x0
         self.uref = self.u0
+
+        frozen_names = ["FL_HAA", "FL_HFE", "FL_KFE",
+                            "HL_HAA", "HL_HFE", "HL_KFE",
+                            "HR_HAA", "HR_HFE", "HR_KFE" ]
+        self.frozen_idxs = [self.model.getJointId(id) for id in frozen_names]
+        
+
+    
+    
+    def freeze(self, idxs):
+        pass
 
     

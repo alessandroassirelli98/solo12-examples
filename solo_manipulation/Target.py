@@ -13,7 +13,7 @@ class Target:
                 + [ [ 1,0,1,1 ] ] * pd.target_steps
         elif pd.useFixedBase == 1:
             self.gait = [] \
-                + [ [ 0,1,0,0 ] ] * pd.init_steps \
+                + [ [ 0,0,0,0 ] ] * pd.init_steps \
                 + [ [ 0,0,0,0 ] ] * pd.target_steps
         else:
             print("'useFixedBase' can be either 0 or 1 !")

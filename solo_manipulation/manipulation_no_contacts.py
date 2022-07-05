@@ -31,7 +31,7 @@ if __name__ == "__main__":
     pd = ProblemDataFull() # Remember to modify also the Example Robot Data
     target = Target(pd)
 
-    horizon = 20
+    horizon = 50
 
     #device = Init_simulation(pd.x0[: pd.nq])
     ctrl = Controller(pd, target, 'crocoddyl')
@@ -44,7 +44,7 @@ if __name__ == "__main__":
 
     try:
         viz = GepettoVisualizer(
-            pd.model, pd.robot.collision_model, pd.robot.visual_model)
+            pd.model, pd.collision_model, pd.visual_model)
         viz.initViewer()
         viz.loadViewerModel()
         gv = viz.viewer.gui
