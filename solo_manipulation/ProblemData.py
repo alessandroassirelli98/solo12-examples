@@ -35,7 +35,7 @@ class problemDataAbstract:
 
         self.effort_limit = np.ones(self.nu) *3   
 
-        self.v0 = np.zeros(self.nv)
+        self.v0 = np.zeros(18)
         self.x0 = np.concatenate([self.q0, self.v0])
         self.u0 = np.zeros(self.nu)
 
@@ -117,8 +117,9 @@ class ProblemDataFull(problemDataAbstract):
         self.state_reg_w = np.array([1e-3] * 3 + [1e-1]*3)
         self.terminal_velocity_w = np.array([0] * 3 + [1e3] * 3 )
 
-        self.q0 = self.q0[10:13]
-        self.x0 = np.concatenate([self.q0, self.v0])
+        self.q0_reduced = self.q0[10:13]
+        self.v0_reduced = np.zeros(self.nq)
+        self.x0 = np.concatenate([self.q0_reduced, self.v0_reduced])
 
         self.xref = self.x0
         self.uref = self.u0

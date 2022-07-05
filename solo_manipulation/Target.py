@@ -28,7 +28,7 @@ class Target:
         pin.updateFramePlacements(pd.model, pd.rdata)
         self.FR_foot0 = pd.rdata.oMf[pd.rfFootId].translation.copy()
         self.A = np.array([0, 0.05, 0.05])
-        self.offset = np.array([0.05, 0., 0.06])
+        self.offset = np.array([0.08, 0., 0.06])
         self.freq = np.array([0, 2.5, 2.5])
         self.phase = np.array([0, 0, np.pi/2])
 

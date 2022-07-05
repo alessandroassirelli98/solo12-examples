@@ -11,32 +11,32 @@ from plot_utils import plot_mpc
 def control_loop(init_guess, target):
     for t in range(horizon):
         print( "\nSTEP: ", str(t), "\n")
-        #m = sim.read_state()
+        m = sim.read_state()
 
         target.update(t)
         if t == 0:
             start_time = time()
             ctrl.compute_step(pd.x0)
             print("Time: ", time()-start_time, '\n')
-            #sim.send_torques(ctrl.results.x, ctrl.results.u, ctrl.results.k)
+            sim.send_torques(ctrl.results.x, ctrl.results.u, ctrl.results.k)
         else:
             target.shift_gait()
             start_time = time()
-            ctrl.compute_step(ctrl.results.ocp_storage['xs'][-1][1], loadPreviousSol=True)
+            ctrl.compute_step(m["x_m"], loadPreviousSol=True)
             print("Time: ", time()-start_time, '\n')
-            #sim.send_torques(ctrl.results.x, ctrl.results.u, ctrl.results.k)
+            sim.send_torques(ctrl.results.x, ctrl.results.u, ctrl.results.k)
 
 
 if __name__ == "__main__":
     pd = ProblemDataFull() # Remember to modify also the Example Robot Data
     target = Target(pd)
 
-    horizon = 1000
+    horizon = 2000
 
     ctrl = Controller(pd, target, 'crocoddyl')
-    #sim = BulletWrapper(ctrl)
+    sim = BulletWrapper(ctrl)
 
-    #sim.store_measures()
+    sim.store_measures()
     control_loop(None, target)
     ctrl.results.make_arrays()
     #plot_mpc(ctrl)
@@ -53,5 +53,6 @@ if __name__ == "__main__":
     # SHOW OCP RESULT
     #viz.play(ctrl.results.ocp_storage['xs'][0][:, :19].T, pd.dt)
     viz.play(ctrl.get_q_mpc().T, pd.dt)
+    viz.play(ctrl.get_q_sim_mpc().T, pd.dt_sim)
 
 
