@@ -31,7 +31,7 @@ if __name__ == "__main__":
     pd = ProblemDataFull() # Remember to modify also the Example Robot Data
     target = Target(pd)
 
-    horizon = 100
+    horizon = 500
 
     #device = Init_simulation(pd.x0[: pd.nq])
     ctrl = Controller(pd, target, 'crocoddyl')

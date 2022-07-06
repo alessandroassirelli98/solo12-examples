@@ -74,21 +74,21 @@ class ProblemDataFull:
     def __init__(self):
         self.useFixedBase = 1
 
-        self.dt = 0.015 # OCP dt
+        self.dt = 0.002 # OCP dt
         self.dt_sim = 0.001
         self.dt_bldc = 0.0005
         self.r1 = int(self.dt / self.dt_sim)
         self.r2 = int(self.dt_sim / self.dt_bldc)
-        self.init_steps = 0 # full stand phase
-        self.target_steps = 20 # manipulation steps
+        self.init_steps = 20 # full stand phase
+        self.target_steps = 60 # manipulation steps
         self.T = self.init_steps + self.target_steps -1
 
         # Cost function weights
         self.mu = 0.7
-        self.friction_cone_w = 1e3 # Not needed because no contact is considered
+        #self.friction_cone_w = 1e3 # Not needed because no contact is considered
         self.control_bound_w = 1e3
         self.foot_tracking_w = 1e2
-        self.control_reg_w = 1e1 *0
+        self.control_reg_w = 1e1
         self.state_reg_w = np.array( [1e0] * 3 \
                             + [1e-3] * 3\
                             + [1e0] * 6
