@@ -143,7 +143,7 @@ class CrocoddylOCP:
             us = guess['us']
             print("Using warmstart")
         start_time = time()
-        self.ddp.solve(xs, us, 1, False)
+        self.ddp.solve(xs, us, 30, False)
         print("Solver time: ", time()- start_time, "\n")
 
     def get_croco_forces(self):

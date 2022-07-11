@@ -32,7 +32,7 @@ if __name__ == "__main__":
 
     horizon = 200
 
-    ctrl = Controller(pd, target, 'ipopt')
+    ctrl = Controller(pd, target, 'crocoddyl')
     sim = BulletWrapper(ctrl)
 
     try:
