@@ -15,7 +15,7 @@ def control_loop(init_guess, target):
 
         target.update(t)
         if t == 0:
-            ctrl.compute_step(pd.x0, guess=init_guess)
+            ctrl.compute_step(pd.x0_reduced, guess=init_guess)
             sim.send_torques(ctrl.results.x, ctrl.results.u, ctrl.results.k)
         else:
             target.shift_gait()
@@ -27,12 +27,12 @@ def control_loop(init_guess, target):
 
 
 if __name__ == "__main__":
-    pd = ProblemData() # Remember to modify also the Example Robot Data
+    pd = ProblemDataFull() # Remember to modify also the Example Robot Data
     target = Target(pd)
 
     horizon = 200
 
-    ctrl = Controller(pd, target, 'ipopt')
+    ctrl = Controller(pd, target, 'crocoddyl')
     sim = BulletWrapper(ctrl)
 
     guesses = np.load('/tmp/sol_crocoddyl.npy', allow_pickle=True).item()
