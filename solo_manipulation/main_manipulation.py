@@ -32,14 +32,18 @@ if __name__ == "__main__":
 
     horizon = 200
 
-    ctrl = Controller(pd, target, 'crocoddyl')
+    ctrl = Controller(pd, target, 'ipopt')
     sim = BulletWrapper(ctrl)
 
-    guesses = np.load('/tmp/sol_crocoddyl.npy', allow_pickle=True).item()
-    init_guess = {'xs': list(guesses['xs']), 'us': list(guesses['us'])}
+    try:
+        guesses = np.load('/tmp/sol_crocoddyl.npy', allow_pickle=True).item()
+        init_guess = {'xs': list(guesses['xs']), 'us': list(guesses['us'])}
+    except:
+        init_guess = None
+        print("No first guess")
 
     sim.store_measures()
-    control_loop(None, target)
+    control_loop(init_guess, target)
     ctrl.results.make_arrays()
     plot_mpc(ctrl)
 
