@@ -16,7 +16,7 @@ def control_loop(init_guess, target):
         target.update(t)
         if t == 0:
             start_time = time()
-            ctrl.compute_step(pd.x0)
+            ctrl.compute_step(m["x_m"])
             print("Time: ", time()-start_time, '\n')
             sim.send_torques(ctrl.results.x, ctrl.results.u, ctrl.results.k)
         else:

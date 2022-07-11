@@ -271,7 +271,7 @@ class pybullet_simulator:
         pyb.setGravity(0, 0, -9.81)
 
         # Load Quadruped robot
-        robotStartPos = [0, 0, 0.23289725]
+        robotStartPos = [0, 0, 0.2607495]
         robotStartOrientation = pyb.getQuaternionFromEuler([0.0, 0.0, 0.0])
         pyb.setAdditionalSearchPath(
             EXAMPLE_ROBOT_DATA_MODEL_DIR + "/solo_description/robots"

@@ -15,6 +15,7 @@ class problemDataAbstract:
 
         self.robot = erd.load("solo12")
         self.q0 = self.robot.q0
+        self.q0[7:] = np.array( [0.0, 0.7, -1.4, 0.0, 0.7, -1.4, 0.0, -0.7, 1.4, 0.0, -0.7, 1.4])
 
         self.model = self.robot.model
         self.rdata = self.model.createData()
@@ -86,9 +87,12 @@ class ProblemData(problemDataAbstract):
         self.terminal_velocity_w = np.array([0] * 18 + [1e3] * 18 )
         self.control_bound_w = 1e3
 
-        self.x0 = np.array([ 0, 0, 0.23289725, 0, 0, 0, 1, 0.1, 0.8, -1.6,
-                            -0.1,  0.8, -1.6,  0.1, -0.8, 1.6, -0.1, -0.8, 1.6,
-                            0, 0, 0,  0,  0,  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]) # x0 got from PyBullet
+        self.x0 = np.array([ 0.0, 0.0, 0.2607495, 0, 0, 0, 1,
+                             0,  0.7, -1.4,  
+                             0. ,  0.7, -1.4,  
+                             0. , -0.7,  1.4,  
+                             0. , -0.7, 1.4,
+                             0, 0, 0,  0,  0,  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]) # x0 got from PyBullet
                             
         self.u0 = np.array([-0.02615051, -0.25848605,  0.51696646,  
                             0.0285894 , -0.25720605, 0.51441775, 
@@ -113,17 +117,14 @@ class ProblemDataFull(problemDataAbstract):
         self.foot_tracking_w = 1e2
         #self.friction_cone_w = 1e3 * 0
         self.control_bound_w = 1e3
-        self.control_reg_w = 1e1
+        self.control_reg_w = 1e1 
         self.state_reg_w = np.array([1e-3] * 3 + [1e-1]*3)
         self.terminal_velocity_w = np.array([0] * 3 + [1e3] * 3 )
 
         self.q0_reduced = self.q0[10:13]
         self.v0_reduced = np.zeros(self.nq)
-        self.x0 = np.concatenate([self.q0_reduced, self.v0_reduced])
+        self.x0_reduced = np.concatenate([self.q0_reduced, self.v0_reduced])
 
-        self.xref = self.x0
+        self.xref = self.x0_reduced
         self.uref = self.u0
-    
-    
-
     

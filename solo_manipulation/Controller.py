@@ -83,8 +83,8 @@ class Controller:
             #self.last_result['us'] = u[1:]  + [u[-1] + (u[-1]- u[-2])/2]           
             #self.last_result['fs'] = f[1:]  + [f[-1] + (f[-1]- f[-2])/2]         
 
-            self.results.x = np.array(x[0])
-            self.results.u = np.array(u[0])
+            self.results.x = np.array(x[1])
+            self.results.u = np.array(u[1])
             if self.solver == 'crocoddyl':
                 self.results.k = self.ocp.ddp.K[0]
 

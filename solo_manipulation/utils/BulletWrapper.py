@@ -34,15 +34,14 @@ class BulletWrapper:
             v = x[3:]
             q_des, v_des = self.interpolate_traj(q, v, self.ctrl.pd.r1)
             for t in range(self.ctrl.pd.r1):
-                m = self.read_state()
                 q_ref = self.ctrl.pd.q0[7:]
                 q_ref[3:6] = q_des[t]
                 v_ref = self.ctrl.pd.v0[6:]
                 v_ref[3:6] = v_des[t]
                 self.device.joints.set_desired_positions(q_ref)
                 self.device.joints.set_desired_velocities(v_ref)
-                self.device.joints.set_position_gains(100)
-                self.device.joints.set_velocity_gains(0.01)
+                self.device.joints.set_position_gains([100] * 12)
+                self.device.joints.set_velocity_gains([0.01]* 12)
                 self.device.send_command_and_wait_end_of_cycle()
                 self.store_measures()
 

@@ -32,7 +32,7 @@ if __name__ == "__main__":
 
     horizon = 200
 
-    ctrl = Controller(pd, target, 'crocoddyl')
+    ctrl = Controller(pd, target, 'ipopt')
     sim = BulletWrapper(ctrl)
 
     guesses = np.load('/tmp/sol_crocoddyl.npy', allow_pickle=True).item()
