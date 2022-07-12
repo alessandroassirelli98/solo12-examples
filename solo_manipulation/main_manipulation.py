@@ -14,11 +14,11 @@ def control_loop(init_guess, target):
         m = sim.read_state()
 
         target.update(t)
+        target.shift_gait()
         if t == 0:
             ctrl.compute_step(pd.x0_reduced, guess=init_guess)
             sim.send_torques(ctrl.results.x, ctrl.results.u, ctrl.results.k)
         else:
-            target.shift_gait()
             start_time = time()
             #ctrl.compute_step(ctrl.results.ocp_storage['xs'][-1][1], loadPreviousSol=True)
             ctrl.compute_step(m['x_m'], loadPreviousSol=True)
@@ -41,7 +41,7 @@ if __name__ == "__main__":
     sim.store_measures()
     control_loop(None, target)
     ctrl.results.make_arrays()
-    plot_mpc(ctrl)
+    #plot_mpc(ctrl)
 
     try:
         viz = GepettoVisualizer(
